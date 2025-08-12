@@ -5,8 +5,7 @@
 <title>Signage Survey (Images + PDF)</title>
 <meta name="theme-color" content="#0ea5e9">
 
-<!-- pdf.js (for converting PDF pages to images on upload). 
-     Uses a public CDN so it works on your phone without any build tools. -->
+<!-- pdf.js for converting PDF pages to images on upload (works on phone, no build tools) -->
 <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@4.7.76/build/pdf.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@4.7.76/build/pdf.worker.min.js"></script>
 
@@ -69,11 +68,7 @@ button,input,select,textarea{font:inherit}
 
   <div class="layout">
     <div class="left" id="thumbs"></div>
-
-    <div class="center">
-      <div class="canvas-wrap" id="canvas"></div>
-    </div>
-
+    <div class="center"><div class="canvas-wrap" id="canvas"></div></div>
     <div class="right" id="rightPanel">
       <h3 style="margin:6px 0 10px 0">Sign Details</h3>
       <div class="label small" id="noSel">Tap the image to drop a pin, or select one.</div>
@@ -111,6 +106,7 @@ const SIGN_TYPES={"FOH":"#0ea5e9","BOH":"#64748b","Elevator":"#8b5cf6","UNIT ID"
 const SHORTS={"Elevator":"ELV","Hall Direct":"HD","Callbox":"CB","Evac":"EV","Ingress":"ING","Egress":"EGR","Exit":"EXIT","Restroom":"WC","UNIT ID":"UNIT","FOH":"FOH","BOH":"BOH","Stair - Ingress":"ING","Stair - Egress":"EGR"};
 const $=s=>document.querySelector(s); const el=(t,a={},k=[])=>{const n=document.createElement(t);for(const p in a){if(p==='style')Object.assign(n.style,a[p]);else n.setAttribute(p,a[p])}k.forEach(c=>n.append(c));return n};
 const storeKey='survey:projects-allinone', lastKey='survey:last-allinone';
+const MAX_SIDE = 2560; // downscale huge images so they display & save reliably on phones
 
 /* ---------- State ---------- */
 let projects=JSON.parse(localStorage.getItem(storeKey)||'[]');
@@ -122,14 +118,14 @@ function setLast(id){ localStorage.setItem(lastKey, id); }
 function getLast(){ return localStorage.getItem(lastKey); }
 
 /* ---------- Models ---------- */
-function emptyProject(){ return { id:'p_'+Math.random().toString(36).slice(2), name:'Untitled Project', createdAt:Date.now(), updatedAt:Date.now(), pages:[], lastBuilding:'', lastLevel:'' }; }
+function emptyProject(){ return { id:'p_'+rnd(), name:'Untitled Project', createdAt:Date.now(), updatedAt:Date.now(), pages:[], lastBuilding:'', lastLevel:'' }; }
 function newProject(){ const p=emptyProject(); projects.push(p); save(); openProject(p.id); }
-function saveAs(){ if(!current) return; const c=structuredClone(current); c.id='p_'+Math.random().toString(36).slice(2); c.name=current.name+' (Copy)'; projects.push(c); save(); openProject(c.id); }
+function saveAs(){ if(!current) return; const c=structuredClone(current); c.id='p_'+rnd(); c.name=current.name+' (Copy)'; projects.push(c); save(); openProject(c.id); }
 function renameProject(){ if(!current) return; const name=prompt('Project name:', current.name||''); if(name && name.trim()){ current.name=name.trim(); current.updatedAt=Date.now(); save(); renderProjectPicker(); } }
 function openProject(id){ current=projects.find(p=>p.id===id)||projects[projects.length-1]||null; pageIndex=0; selectedPinId=null; setLast(current?.id||''); renderAll(); }
 function renamePage(i){ const pg=current.pages[i]; const name=prompt('Page name:', pg.name||''); if(name && name.trim()){ pg.name=name.trim(); current.updatedAt=Date.now(); save(); renderThumbs(); } }
 
-/* ---------- Thumbs / Canvas ---------- */
+/* ---------- UI ---------- */
 function renderProjectPicker(){
   const sel=$('#openProject');
   sel.innerHTML='<option value="" disabled selected>Open Project…</option>'+projects.map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
@@ -155,7 +151,7 @@ function renderCanvas(){
   const page=current.pages[pageIndex];
   if(!page){ wrap.innerHTML='<div style="padding:16px;color:#94a3b8">New → upload PDF or images (site maps, floor plans). Tap to add pins.</div>'; return; }
   const img=el('img',{src:page.dataUrl,alt:''}); wrap.append(img);
-  const hint=el('div',{class:'tap-hint'},[document.createTextNode('Tap anywhere to add a pin. Drag to move.')]); wrap.append(hint);
+  wrap.append(el('div',{class:'tap-hint'},[document.createTextNode('Tap anywhere to add a pin. Drag to move.')]));
 
   page.pins.forEach(p=>{
     if(filterType&&p.sign_type!==filterType) return;
@@ -184,8 +180,7 @@ function movePinWithEvent(p,wrap,e){
   p.lastEdited=Date.now(); current.updatedAt=Date.now(); save();
 }
 
-/* ---------- Uploads (PDF -> image pages, Images with resize) ---------- */
-const MAX_SIDE = 2560; // keep images manageable for mobile memory
+/* ---------- Upload handling ---------- */
 $('#uploadBtn').onclick=()=>$('#upload').click();
 $('#upload').onchange=e=>{
   const files=Array.from(e.target.files||[]);
@@ -201,25 +196,11 @@ $('#upload').onchange=e=>{
   })();
 };
 
-async function addPageFromImageFile(file){
-  const url = await readAsDataURL(file);
-  const img = await loadImage(url);
-  let out=url, w=img.naturalWidth, h=img.naturalHeight;
-  if(Math.max(w,h) > MAX_SIDE){
-    const scale = MAX_SIDE/Math.max(w,h);
-    const cw=Math.round(w*scale), ch=Math.round(h*scale);
-    out = drawToDataURL(img, cw, ch, 'image/jpeg', 0.85);
-  }
-  const pg={ id:'pg_'+rnd(), name:file.name, kind:'image', dataUrl:out, pins:[] };
-  current.pages.push(pg); current.updatedAt=Date.now(); save(); pageIndex=current.pages.length-1; renderAll();
-}
-
 async function addPagesFromPdfFile(file){
   const ab = await readAsArrayBuffer(file);
   const pdf = await pdfjsLib.getDocument({data:new Uint8Array(ab)}).promise;
   for(let i=1;i<=pdf.numPages;i++){
     const page = await pdf.getPage(i);
-    // render at ~1600px width to keep quality + speed; adjust by viewport width
     const viewport = page.getViewport({scale:1});
     const targetW = Math.min(MAX_SIDE, 1600);
     const scale = targetW/viewport.width;
@@ -233,6 +214,41 @@ async function addPagesFromPdfFile(file){
     current.pages.push(pg);
   }
   current.updatedAt=Date.now(); save(); pageIndex=current.pages.length-1; renderAll();
+}
+
+async function addPageFromImageFile(file){
+  // Try object URL first (more reliable for HEIC), then downscale + save as JPEG for persistence
+  const objUrl = URL.createObjectURL(file);
+  let img;
+  try {
+    img = await loadImageAny(objUrl);
+  } catch {
+    try {
+      const dataURL = await readAsDataURL(file);
+      img = await loadImageAny(dataURL);
+    } catch (e2) {
+      URL.revokeObjectURL(objUrl);
+      alert("This image couldn't be decoded by the browser. If it's HEIC, try 'Most Compatible' (JPEG) or export as PNG/JPG.");
+      return;
+    }
+  }
+
+  let w=img.naturalWidth, h=img.naturalHeight, outURL;
+  if (Math.max(w,h) > MAX_SIDE) {
+    const scale = MAX_SIDE/Math.max(w,h);
+    const cw = Math.round(w*scale), ch = Math.round(h*scale);
+    outURL = drawToDataURL(img, cw, ch, 'image/jpeg', 0.85);
+  } else {
+    outURL = drawToDataURL(img, w, h, 'image/jpeg', 0.92);
+  }
+  URL.revokeObjectURL(objUrl);
+
+  try{
+    const pg={ id:'pg_'+rnd(), name:file.name, kind:'image', dataUrl:outURL, pins:[] };
+    current.pages.push(pg); current.updatedAt=Date.now(); save(); pageIndex=current.pages.length-1; renderAll();
+  }catch(e){
+    alert("That image was too large to save on this device. Try a smaller export or screenshot.");
+  }
 }
 
 /* ---------- Pin details ---------- */
@@ -309,7 +325,7 @@ function exportCsv(){
 function rnd(){ return Math.random().toString(36).slice(2); }
 function readAsDataURL(file){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(file); }); }
 function readAsArrayBuffer(file){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsArrayBuffer(file); }); }
-function loadImage(src){ return new Promise((res,rej)=>{ const im=new Image(); im.onload=()=>res(im); im.onerror=rej; im.src=src; }); }
+function loadImageAny(src){ return new Promise((res,rej)=>{ const im=new Image(); im.onload=()=>res(im); im.onerror=()=>rej(new Error('decode-failed')); im.src=src; }); }
 function drawToDataURL(img, w, h, type='image/jpeg', quality=0.9){
   const c=document.createElement('canvas'); c.width=w; c.height=h; const ctx=c.getContext('2d'); ctx.drawImage(img,0,0,w,h); return c.toDataURL(type, quality);
 }
@@ -331,6 +347,8 @@ function init(){
   $('#level').oninput=e=>{ if(!current) return; current.lastLevel=e.target.value; save(); };
   $('#filterType').onchange=e=>{ filterType=e.target.value; renderCanvas(); };
   $('#search').oninput=e=>{ searchText=(e.target.value||'').toLowerCase(); renderCanvas(); };
+
+  $('#uploadBtn').onclick=()=>$('#upload').click();
 
   const last=getLast(); if(projects.length && last){ current=projects.find(p=>p.id===last)||projects[0]; } else if(projects.length){ current=projects[0]; }
   if(current){ $('#bldg').value=current.lastBuilding||''; $('#level').value=current.lastLevel||''; }
