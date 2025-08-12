@@ -1,9 +1,15 @@
-<!DOCTYPE html>
+# We'll generate a single-file HTML app (CDN-based for now due to no internet access to embed library code).
+# The file will be readable, with DOMContentLoaded wrapper, and no integrity attributes.
+# Save it at /mnt/data/index.html for the user to download.
+
+html = r"""<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Signage Survey – Single‑File (GitHub Pages)</title>
+  <title>Signage Survey – Single‑File (GitHub Pages Ready)</title>
+  <!-- Inline SVG favicon to avoid 404s -->
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' ry='10' fill='%23131a33'/%3E%3Cpath d='M12 44 L28 20 L40 36 L52 24' stroke='%234cc9f0' stroke-width='6' fill='none'/%3E%3Ccircle cx='28' cy='20' r='3' fill='%23a3e635'/%3E%3Ccircle cx='40' cy='36' r='3' fill='%23a3e635'/%3E%3Ccircle cx='52' cy='24' r='3' fill='%23a3e635'/%3E%3C/svg%3E" />
   <style>
     :root{
       --bg:#0b1020;--panel:#11162a;--soft:#1a2240;--text:#e6e9f5;--muted:#aab0c6;--accent:#4cc9f0;--ok:#22c55e;--warn:#f59e0b;--err:#ef4444;
@@ -56,13 +62,16 @@
     .tag{font-size:.75rem; padding:.15rem .45rem; border-radius:999px; background:#18224a; border:1px solid #2b3566}
     .help{font-size:.8rem; color:#97a3d9}
   </style>
-  <!-- Libraries via CDN (single-file convenience). If you later want NO CDN, we can inline or bundle. -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" integrity="sha512-JO0fm7k1kQ8Lz+n7D0wB0mQfH7C9O6qdgH8Kc2Q5wHFSQdQvva4a6tqZVx9v1h7zJmY5P5bD3GgI0p9P+Zp2gw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" integrity="sha512-vl+kqZq4iGiQmG9Jz3VY/e0T9qA+co1S9CJBtJ6LTtTcv6M9+fG9R7kzW/6Gk5CkZkzwpZ6T0T0hO7rQ+9V2qg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.0/dist/tesseract.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js" integrity="sha512-4mQjFj6mP3tJ5m6m9Y0mQW0p8P3dR9Q0X1tq3VhXj6J9Lk1j2m0gH0yLqc3w4uKj7e0UuKz7i9m2y0mQ6fIkgw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+  <!-- Libraries from CDN (no integrity/crossorigin). This version requires internet.
+       If you want fully offline, you can paste the contents of these files inline later. -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.1.0/tesseract.min.js"></script>
   <script>
-    // Configure pdf.js worker (from same CDN version)
+    // Configure pdf.js worker (from same version)
     if (window['pdfjsLib']) {
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
     }
@@ -75,6 +84,7 @@
         <button id="btnNew">New Project</button>
         <button id="btnOpen">Open Project</button>
         <button id="btnSaveAs">Save As…</button>
+        <button id="btnRename">Rename Project</button>
       </div>
       <div class="group">
         <input type="file" id="inputUpload" accept="image/*,application/pdf" multiple class="hidden" />
@@ -116,7 +126,7 @@
       <div class="panel">
         <h3>Pages</h3>
         <div class="thumbs" id="thumbs"></div>
-        <div class="footer-note">Tip: Click a page to switch. Rename below each thumbnail.</div>
+        <div class="footer-note">Tip: Click a page to switch. Rename under each thumbnail.</div>
       </div>
 
       <div class="panel stage" id="stage">
@@ -203,6 +213,7 @@
   </div>
 
   <script>
+  document.addEventListener('DOMContentLoaded', () => {
     /***********************
      * Sign types & colors *
      ***********************/
@@ -211,177 +222,176 @@
     };
     const SHORT = { 'Elevator':'ELV','Hall Direct':'HD','Callbox':'CB','Evac':'EV','Ingress':'ING','Egress':'EGR','Exit':'EXIT','Restroom':'WC','UNIT ID':'UNIT','FOH':'FOH','BOH':'BOH','Stair - Ingress':'ING','Stair - Egress':'EGR' };
 
-    /****************
-     * App State    *
-     ****************/
-    let projects = loadProjects();
-    let currentProjectId = localStorage.getItem('survey:lastOpenProjectId') || null;
-    let project = currentProjectId ? projects.find(p=>p.id===currentProjectId) : null;
-    if(!project) { project = newProject('Untitled Project'); saveProject(project); }
-    selectProject(project.id);
+    // Helper shims
+    const $ = (id) => document.getElementById(id);
+    const on = (el, evt, fn) => el && el.addEventListener(evt, fn);
+
+    // Prebind refs
+    let projects, currentProjectId, project;
+    const thumbsEl = $('thumbs');
+    const stageImage = $('stageImage');
+    const stage = $('stage');
+    const pinLayer = $('pinLayer');
+    const measureSvg = $('measureSvg');
+    const projectLabel = $('projectLabel');
+
+    const fieldType = $('fieldType');
+    const fieldRoomNum = $('fieldRoomNum');
+    const fieldRoomName = $('fieldRoomName');
+    const fieldBuilding = $('fieldBuilding');
+    const fieldLevel = $('fieldLevel');
+    const fieldNotes = $('fieldNotes');
+    const selId = $('selId');
+    const posLabel = $('posLabel');
+    const gpsLabel = $('gpsLabel');
+    const warnsEl = $('warns');
+
+    const pinList = $('pinList');
+
+    const inputBuilding = $('inputBuilding');
+    const inputLevel = $('inputLevel');
+
+    const inputUpload = $('inputUpload');
+
+    const filterType = $('filterType');
+    const inputSearch = $('inputSearch');
+    const toggleStrict = $('toggleStrict');
+    const toggleField = $('toggleField');
+
+    // Modal refs
+    const photoModal = $('photoModal');
+    const photoImg = $('photoImg');
+    const photoMeasureSvg = $('photoMeasureSvg');
+    const photoPinId = $('photoPinId');
+    const photoName = $('photoName');
+    const photoMeaCount = $('photoMeaCount');
+
+    // Populate type selectors
+    Object.keys(SIGN_TYPES).forEach(t=>{
+      const o=document.createElement('option'); o.value=t; o.textContent=t;
+      filterType.appendChild(o.cloneNode(true));
+      fieldType.appendChild(o);
+    });
 
     // Undo/redo stacks (store snapshots)
     const UNDO = []; const REDO = []; const MAX_UNDO = 50;
 
-    // UI refs
-    const thumbsEl = document.getElementById('thumbs');
-    const stageImage = document.getElementById('stageImage');
-    const stage = document.getElementById('stage');
-    const pinLayer = document.getElementById('pinLayer');
-    const measureSvg = document.getElementById('measureSvg');
-    const projectLabel = document.getElementById('projectLabel');
+    // Load / init project state
+    projects = loadProjects();
+    currentProjectId = localStorage.getItem('survey:lastOpenProjectId') || null;
+    project = currentProjectId ? projects.find(p=>p.id===currentProjectId) : null;
+    if(!project){ project = newProject('Untitled Project'); saveProject(project); }
+    selectProject(project.id);
 
-    const fieldType = document.getElementById('fieldType');
-    const fieldRoomNum = document.getElementById('fieldRoomNum');
-    const fieldRoomName = document.getElementById('fieldRoomName');
-    const fieldBuilding = document.getElementById('fieldBuilding');
-    const fieldLevel = document.getElementById('fieldLevel');
-    const fieldNotes = document.getElementById('fieldNotes');
-    const selId = document.getElementById('selId');
-    const posLabel = document.getElementById('posLabel');
-    const gpsLabel = document.getElementById('gpsLabel');
-    const warnsEl = document.getElementById('warns');
-
-    const pinList = document.getElementById('pinList');
-
-    const inputBuilding = document.getElementById('inputBuilding');
-    const inputLevel = document.getElementById('inputLevel');
-
-    const inputUpload = document.getElementById('inputUpload');
-
-    const filterType = document.getElementById('filterType');
-    const inputSearch = document.getElementById('inputSearch');
-    const toggleStrict = document.getElementById('toggleStrict');
-    const toggleField = document.getElementById('toggleField');
-
-    // Modal refs
-    const photoModal = document.getElementById('photoModal');
-    const photoImg = document.getElementById('photoImg');
-    const photoMeasureSvg = document.getElementById('photoMeasureSvg');
-    const photoPinId = document.getElementById('photoPinId');
-    const photoName = document.getElementById('photoName');
-    const photoMeaCount = document.getElementById('photoMeaCount');
-
-    // Populate type selectors
-    Object.keys(SIGN_TYPES).forEach(t=>{
-      const o=document.createElement('option'); o.value=t; o.textContent=t; filterType.appendChild(o.cloneNode(true)); fieldType.appendChild(o);
-    });
-
-    // Toolbar Events
-    document.getElementById('btnNew').onclick = ()=>{ const name=prompt('New project name?','New Project'); if(!name) return; commit(); const p=newProject(name); saveProject(p); selectProject(p.id); };
-    document.getElementById('btnOpen').onclick = ()=>{
-      const items = projects.map(p=>`• ${p.name} (${new Date(p.updatedAt).toLocaleString()}) [${p.id}]`).join('\n');
-      const id = prompt('Projects:\n'+items+'\n\nEnter project id to open:');
+    // Toolbar
+    on($('btnNew'),'click',()=>{ const name=prompt('New project name?','New Project'); if(!name) return; commit(); const p=newProject(name); saveProject(p); selectProject(p.id); });
+    on($('btnOpen'),'click',()=>{
+      const items = projects.map(p=>`• ${p.name} (${new Date(p.updatedAt).toLocaleString()}) [${p.id}]`).join('\\n');
+      const id = prompt('Projects:\\n'+items+'\\n\\nEnter project id to open:');
       const found = projects.find(p=>p.id===id);
       if(found){ selectProject(found.id); } else alert('Not found');
-    };
-    document.getElementById('btnSaveAs').onclick = ()=>{ const name=prompt('Duplicate as name:', project.name+' (copy)'); if(!name) return; commit(); const copy=JSON.parse(JSON.stringify(project)); copy.id=id(); copy.name=name; copy.createdAt=Date.now(); copy.updatedAt=Date.now(); saveProject(copy); selectProject(copy.id); };
+    });
+    on($('btnSaveAs'),'click',()=>{ const name=prompt('Duplicate as name:', project.name+' (copy)'); if(!name) return; commit(); const copy=JSON.parse(JSON.stringify(project)); copy.id=id(); copy.name=name; copy.createdAt=Date.now(); copy.updatedAt=Date.now(); saveProject(copy); selectProject(copy.id); });
+    on($('btnRename'),'click',()=>{ const name=prompt('Rename project:', project.name); if(!name) return; commit(); project.name=name; saveProject(project); renderProjectLabel(); });
 
-    document.getElementById('btnUpload').onclick = ()=> inputUpload.click();
-    inputUpload.onchange = async (e)=>{
-      const files = [...e.target.files];
-      if(!files.length) return;
-      commit();
+    on($('btnUpload'),'click',()=> inputUpload.click());
+    on(inputUpload,'change', async (e)=>{
+      const files=[...e.target.files]; if(!files.length) return; commit();
       for(const f of files){
         if(f.type==='application/pdf'){ await addPdfPages(f); }
-        else if(f.type.startsWith('image/')){ const url=URL.createObjectURL(f); const name=f.name.replace(/\.[^.]+$/,''); addImagePage(url,name); }
+        else if(f.type.startsWith('image/')){ const url=URL.createObjectURL(f); const name=f.name.replace(/\\.[^.]+$/,''); addImagePage(url,name); }
       }
       renderAll();
-    };
-
-    document.getElementById('btnExportCSV').onclick = ()=> exportCSV();
-    document.getElementById('btnExportXLSX').onclick = ()=> exportXLSX();
-    document.getElementById('btnExportZIP').onclick = ()=> exportZIP();
-
-    document.getElementById('btnImportCSV').onclick = ()=> document.getElementById('inputImportCSV').click();
-    document.getElementById('inputImportCSV').onchange = async (e)=>{
-      const f=e.target.files[0]; if(!f) return; const text=await f.text(); importCSV(text);
-    };
-
-    document.getElementById('btnOCR').onclick = ()=> ocrCurrentView();
-
-    const btnCalibrate = document.getElementById('btnCalibrate');
-    const btnMeasureToggle = document.getElementById('btnMeasureToggle');
-    const btnMeasureReset = document.getElementById('btnMeasureReset');
-
-    btnCalibrate.onclick = ()=> startCalibration('main');
-    btnMeasureToggle.onclick = ()=> toggleMeasuring('main');
-    btnMeasureReset.onclick = ()=> resetMeasurements('main');
-
-    document.getElementById('btnUndo').onclick = ()=> undo();
-    document.getElementById('btnRedo').onclick = ()=> redo();
-
-    document.getElementById('btnClearPins').onclick = ()=>{ if(!confirm('Clear ALL pins on this page?')) return; commit(); currentPage().pins=[]; renderAll(); };
-    document.getElementById('btnAddPin').onclick = ()=> startAddPin();
-
-    toggleStrict.onchange = ()=>{ project.settings.strictRules = !!toggleStrict.checked; saveProject(project); renderWarnings(); };
-    toggleField.onchange = ()=>{ project.settings.fieldMode = !!toggleField.checked; saveProject(project); renderPins(); };
-
-    inputBuilding.oninput = ()=>{ projectContext.building = inputBuilding.value; };
-    inputLevel.oninput = ()=>{ projectContext.level = inputLevel.value; };
-
-    inputSearch.oninput = ()=> renderPinsList();
-    filterType.onchange = ()=> renderPins();
-
-    // Right panel fields events
-    [fieldType, fieldRoomNum, fieldRoomName, fieldBuilding, fieldLevel, fieldNotes].forEach(el=>{
-      el.oninput = ()=>{
-        const pin = selectedPin(); if(!pin) return; commit();
-        if(el===fieldType) pin.sign_type = el.value || '';
-        if(el===fieldRoomNum) pin.room_number = el.value || '';
-        if(el===fieldRoomName) pin.room_name = el.value || '';
-        if(el===fieldBuilding) pin.building = el.value || '';
-        if(el===fieldLevel) pin.level = el.value || '';
-        if(el===fieldNotes) pin.notes = el.value || '';
-        pin.lastEdited=Date.now(); saveProject(project); renderPins(); renderWarnings(); renderPinsList();
-      }
     });
 
-    document.getElementById('btnAddPhoto').onclick = ()=> document.getElementById('inputPhoto').click();
-    document.getElementById('inputPhoto').onchange = async (e)=>{
+    on($('btnExportCSV'),'click',()=> exportCSV());
+    on($('btnExportXLSX'),'click',()=> exportXLSX());
+    on($('btnExportZIP'),'click',()=> exportZIP());
+
+    on($('btnImportCSV'),'click',()=> $('inputImportCSV').click());
+    on($('inputImportCSV'),'change', async (e)=>{
+      const f=e.target.files?.[0]; if(!f) return; const text=await f.text(); importCSV(text);
+    });
+
+    on($('btnOCR'),'click',()=> ocrCurrentView());
+
+    const btnCalibrate = $('btnCalibrate');
+    const btnMeasureToggle = $('btnMeasureToggle');
+    const btnMeasureReset = $('btnMeasureReset');
+
+    on(btnCalibrate,'click',()=> startCalibration('main'));
+    on(btnMeasureToggle,'click',()=> toggleMeasuring('main'));
+    on(btnMeasureReset,'click',()=> resetMeasurements('main'));
+
+    on($('btnUndo'),'click',()=> undo());
+    on($('btnRedo'),'click',()=> redo());
+
+    on($('btnClearPins'),'click',()=>{ if(!confirm('Clear ALL pins on this page?')) return; commit(); currentPage().pins=[]; renderAll(); });
+    on($('btnAddPin'),'click',()=> startAddPin());
+
+    on(toggleStrict,'change',()=>{ project.settings.strictRules = !!toggleStrict.checked; saveProject(project); renderWarnings(); });
+    on(toggleField,'change',()=>{ project.settings.fieldMode = !!toggleField.checked; saveProject(project); renderPins(); });
+
+    on(inputBuilding,'input',()=>{ projectContext.building = inputBuilding.value; });
+    on(inputLevel,'input',()=>{ projectContext.level = inputLevel.value; });
+
+    on(inputSearch,'input',()=> renderPinsList());
+    on(filterType,'change',()=> renderPins());
+
+    // Right panel fields
+    [fieldType, fieldRoomNum, fieldRoomName, fieldBuilding, fieldLevel, fieldNotes].forEach(el=> on(el,'input',()=>{
+      const pin = selectedPin(); if(!pin) return; commit();
+      if(el===fieldType) pin.sign_type = el.value || '';
+      if(el===fieldRoomNum) pin.room_number = el.value || '';
+      if(el===fieldRoomName) pin.room_name = el.value || '';
+      if(el===fieldBuilding) pin.building = el.value || '';
+      if(el===fieldLevel) pin.level = el.value || '';
+      if(el===fieldNotes) pin.notes = el.value || '';
+      pin.lastEdited=Date.now(); saveProject(project); renderPins(); renderWarnings(); renderPinsList();
+    }));
+
+    on($('btnAddPhoto'),'click',()=> $('inputPhoto').click());
+    on($('inputPhoto'),'change', async (e)=>{
       const pin = selectedPin(); if(!pin) return alert('Select a pin first.');
-      const files=[...e.target.files]; if(!files.length) return;
-      commit();
+      const files=[...e.target.files]; if(!files.length) return; commit();
       for(const f of files){ const url=await fileToDataURL(f); pin.photos.push({name:f.name,dataUrl:url,measurements:[]}); }
       pin.lastEdited=Date.now(); saveProject(project); renderPinsList(); alert('Photo(s) added.');
-    };
+    });
 
-    document.getElementById('btnOpenPhoto').onclick = ()=> openPhotoModal();
-    document.getElementById('btnDuplicate').onclick = ()=>{ const pin=selectedPin(); if(!pin) return; commit(); const p=JSON.parse(JSON.stringify(pin)); p.id=id(); p.x_pct+=2; p.y_pct+=2; p.lastEdited=Date.now(); currentPage().pins.push(p); saveProject(project); renderPins(); renderPinsList(); selectPin(p.id); };
-    document.getElementById('btnDelete').onclick = ()=>{ const pin=selectedPin(); if(!pin) return; if(!confirm('Delete selected pin?')) return; commit(); currentPage().pins=currentPage().pins.filter(x=>x.id!==pin.id); saveProject(project); renderPins(); renderPinsList(); clearSelection(); };
+    on($('btnOpenPhoto'),'click',()=> openPhotoModal());
+    on($('btnDuplicate'),'click',()=>{ const pin=selectedPin(); if(!pin) return; commit(); const p=JSON.parse(JSON.stringify(pin)); p.id=id(); p.x_pct+=2; p.y_pct+=2; p.lastEdited=Date.now(); currentPage().pins.push(p); saveProject(project); renderPins(); renderPinsList(); selectPin(p.id); });
+    on($('btnDelete'),'click',()=>{ const pin=selectedPin(); if(!pin) return; if(!confirm('Delete selected pin?')) return; commit(); currentPage().pins=currentPage().pins.filter(x=>x.id!==pin.id); saveProject(project); renderPins(); renderPinsList(); clearSelection(); });
 
-    document.getElementById('btnBulkType').onclick = ()=>{
-      const type = prompt('Enter type for selected checkboxes (or empty to cancel):'); if(type==null) return; commit();
-      const ids = checkedPinIds(); ids.forEach(idv=>{ const p=findPin(idv); if(p){ p.sign_type=type; p.lastEdited=Date.now(); }});
-      saveProject(project); renderPins(); renderPinsList();
-    };
-    document.getElementById('btnBulkBL').onclick = ()=>{
-      const b = prompt('Building value (blank to keep):', inputBuilding.value||''); if(b==null) return;
-      const l = prompt('Level value (blank to keep):', inputLevel.value||''); if(l==null) return; commit();
-      const ids = checkedPinIds(); ids.forEach(idv=>{ const p=findPin(idv); if(p){ if(b!=='') p.building=b; if(l!=='') p.level=l; p.lastEdited=Date.now(); }});
-      saveProject(project); renderPins(); renderPinsList();
-    };
+    on($('btnBulkType'),'click',()=>{ const type = prompt('Enter type for selected checkboxes (or empty to cancel):'); if(type==null) return; commit(); const ids = checkedPinIds(); ids.forEach(idv=>{ const p=findPin(idv); if(p){ p.sign_type=type; p.lastEdited=Date.now(); }}); saveProject(project); renderPins(); renderPinsList(); });
+    on($('btnBulkBL'),'click',()=>{ const b = prompt('Building value (blank to keep):', inputBuilding.value||''); if(b==null) return; const l = prompt('Level value (blank to keep):', inputLevel.value||''); if(l==null) return; commit(); const ids = checkedPinIds(); ids.forEach(idv=>{ const p=findPin(idv); if(p){ if(b!=='') p.building=b; if(l!=='') p.level=l; p.lastEdited=Date.now(); }}); saveProject(project); renderPins(); renderPinsList(); });
 
     // Stage interactions
-    let addingPin=false; let dragging=null; let startDrag=null; let fieldMode=false;
+    let addingPin=false; let dragging=null; let measureMode=false; let calibFirst=null; let measureFirst=null; let fieldMode=false;
 
-    stage.addEventListener('pointerdown', (e)=>{
-      if(e.target.classList.contains('pin')) return; // handled by pin
+    on($('stage'),'pointerdown',(e)=>{
+      if(e.target.classList.contains('pin')) return;
       if(!addingPin) return;
       const {x_pct,y_pct} = toPctCoords(e);
       commit();
       const p = makePin(x_pct,y_pct);
       // GPS attempt
-      if(navigator.geolocation){ navigator.geolocation.getCurrentPosition(pos=>{ p.gps={lat:+pos.coords.latitude.toFixed(6), lon:+pos.coords.longitude.toFixed(6)}; saveProject(project); if(selectedPin()?.id===p.id) updatePinDetails(); }, ()=>{}); }
-      currentPage().pins.push(p); saveProject(project); renderPins(); renderPinsList(); selectPin(p.id); addingPin=false; document.getElementById('btnAddPin').classList.remove('ok');
+      if(navigator.geolocation){
+        try { navigator.geolocation.getCurrentPosition(pos=>{
+          p.gps={lat:+pos.coords.latitude.toFixed(6), lon:+pos.coords.longitude.toFixed(6)};
+          saveProject(project);
+          if(selectedPin()?.id===p.id) updatePinDetails();
+        }); } catch {}
+      }
+      currentPage().pins.push(p); saveProject(project); renderPins(); renderPinsList(); selectPin(p.id);
+      addingPin=false; $('btnAddPin').classList.remove('ok');
     });
 
-    pinLayer.addEventListener('pointerdown',(e)=>{
+    on(pinLayer,'pointerdown',(e)=>{
       const el = e.target.closest('.pin'); if(!el) return;
       const idv = el.dataset.id; selectPin(idv);
-      dragging = el; startDrag={dx:e.clientX, dy:e.clientY}; el.setPointerCapture(e.pointerId);
+      dragging = el; el.setPointerCapture?.(e.pointerId);
     });
-    pinLayer.addEventListener('pointermove',(e)=>{
+    on(pinLayer,'pointermove',(e)=>{
       if(!dragging) return; e.preventDefault();
       const pin = findPin(dragging.dataset.id); if(!pin) return;
       const {x_pct,y_pct} = toPctCoords(e);
@@ -389,24 +399,24 @@
       dragging.style.top = y_pct+'%';
       posLabel.textContent = pctLabel(x_pct,y_pct);
     });
-    pinLayer.addEventListener('pointerup',(e)=>{
-      if(!dragging) return; const pin = findPin(dragging.dataset.id); if(pin){ commit(); const {x_pct,y_pct}=toPctCoords(e); pin.x_pct=x_pct; pin.y_pct=y_pct; pin.lastEdited=Date.now(); saveProject(project); renderPinsList(); }
-      dragging.releasePointerCapture?.(e.pointerId); dragging=null; startDrag=null;
+    on(pinLayer,'pointerup',(e)=>{
+      if(!dragging) return;
+      const pin = findPin(dragging.dataset.id);
+      if(pin){ commit(); const {x_pct,y_pct}=toPctCoords(e); pin.x_pct=x_pct; pin.y_pct=y_pct; pin.lastEdited=Date.now(); saveProject(project); renderPinsList(); }
+      dragging.releasePointerCapture?.(e.pointerId); dragging=null;
     });
 
-    function startAddPin(){ addingPin=!addingPin; document.getElementById('btnAddPin').classList.toggle('ok', addingPin); }
+    function startAddPin(){ addingPin=!addingPin; $('btnAddPin').classList.toggle('ok', addingPin); }
 
     /***********************
      * Measurement (main)  *
      ***********************/
-    let measureMode=false; let calibFirst=null; let measureFirst=null;
-    function startCalibration(scope){ calibFirst=null; measureFirst=null; alert('Calibration: click two points on the page to set real feet.'); measureMode=false; btnMeasureToggle.textContent='Measuring: OFF'; calibAwait=scope; }
+    function startCalibration(scope){ calibFirst=null; measureFirst=null; alert('Calibration: click two points on the page to set real feet.'); measureMode=false; $('btnMeasureToggle').textContent='Measuring: OFF'; calibAwait=scope; }
     let calibAwait=null; // 'main' | 'photo'
-    function toggleMeasuring(scope){ measureMode=!measureMode; if(scope==='main') btnMeasureToggle.textContent = 'Measuring: '+(measureMode?'ON':'OFF'); }
-    function resetMeasurements(scope){ if(scope==='main'){ currentPage().measurements=[]; drawMeasurements(); } else { if(photoState.photo){ photoState.photo.measurements=[]; drawPhotoMeasurements(); } }
-    }
+    function toggleMeasuring(scope){ measureMode=!measureMode; if(scope==='main') $('btnMeasureToggle').textContent = 'Measuring: '+(measureMode?'ON':'OFF'); }
+    function resetMeasurements(scope){ if(scope==='main'){ currentPage().measurements=[]; drawMeasurements(); } else { if(photoState.photo){ photoState.photo.measurements=[]; drawPhotoMeasurements(); } } }
 
-    stage.addEventListener('click', (e)=>{
+    on(stage,'click',(e)=>{
       const page=currentPage(); if(!page) return;
       const pt=toLocal(e);
       if(calibAwait==='main'){
@@ -428,7 +438,6 @@
       const page=currentPage();
       while(measureSvg.firstChild) measureSvg.removeChild(measureSvg.firstChild);
       if(!page||!page.measurements) return;
-      const rect = stageImage.getBoundingClientRect();
       page.measurements.forEach(m=>{
         const a=toScreen(m.points[0]); const b=toScreen(m.points[1]);
         const dx=Math.abs(a.x-b.x), dy=Math.abs(a.y-b.y);
@@ -445,31 +454,33 @@
      * Photo modal measure *
      ***********************/
     const photoState = { pin:null, idx:0, measure:false, calib:null };
-    document.getElementById('btnPhotoClose').onclick = ()=> closePhotoModal();
-    document.getElementById('btnPhotoMeasure').onclick = ()=>{ photoState.measure=!photoState.measure; document.getElementById('btnPhotoMeasure').textContent='Measure: '+(photoState.measure?'ON':'OFF'); };
-    document.getElementById('btnPhotoCalib').onclick = ()=>{ photoState.calib=null; alert('Photo calibration: click two points on the image.'); };
-    document.getElementById('btnPhotoPrev').onclick = ()=>{ if(!photoState.pin) return; photoState.idx=Math.max(0,photoState.idx-1); showPhoto(); };
-    document.getElementById('btnPhotoNext').onclick = ()=>{ if(!photoState.pin) return; photoState.idx=Math.min(photoState.pin.photos.length-1,photoState.idx+1); showPhoto(); };
-    document.getElementById('btnPhotoDelete').onclick = ()=>{ if(!photoState.pin) return; if(!confirm('Delete this photo?')) return; commit(); photoState.pin.photos.splice(photoState.idx,1); photoState.idx=Math.max(0,photoState.idx-1); saveProject(project); if(photoState.pin.photos.length===0){ closePhotoModal(); } else { showPhoto(); } };
-    document.getElementById('btnPhotoDownload').onclick = ()=>{ const ph=photoState.pin?.photos[photoState.idx]; if(!ph) return; downloadFile(ph.name, dataURLtoBlob(ph.dataUrl)); };
+    on($('btnPhotoClose'),'click',()=> closePhotoModal());
+    on($('btnPhotoMeasure'),'click',()=>{ photoState.measure=!photoState.measure; $('btnPhotoMeasure').textContent='Measure: '+(photoState.measure?'ON':'OFF'); });
+    on($('btnPhotoCalib'),'click',()=>{ photoState.calib=null; alert('Photo calibration: click two points on the image.'); });
+    on($('btnPhotoPrev'),'click',()=>{ if(!photoState.pin) return; photoState.idx=Math.max(0,photoState.idx-1); showPhoto(); });
+    on($('btnPhotoNext'),'click',()=>{ if(!photoState.pin) return; photoState.idx=Math.min(photoState.pin.photos.length-1,photoState.idx+1); showPhoto(); });
+    on($('btnPhotoDelete'),'click',()=>{ if(!photoState.pin) return; if(!confirm('Delete this photo?')) return; commit(); photoState.pin.photos.splice(photoState.idx,1); photoState.idx=Math.max(0,photoState.idx-1); saveProject(project); if(photoState.pin.photos.length===0){ closePhotoModal(); } else { showPhoto(); } });
+    on($('btnPhotoDownload'),'click',()=>{ const ph=photoState.pin?.photos[photoState.idx]; if(!ph) return; downloadFile(ph.name, dataURLtoBlob(ph.dataUrl)); });
 
-    photoMeasureSvg.addEventListener('click', (e)=>{
+    on($('photoMeasureSvg'),'click',(e)=>{
       const ph = photoState.pin?.photos[photoState.idx]; if(!ph) return;
       const rect = photoImg.getBoundingClientRect();
       const pt = { x: e.clientX-rect.left, y:e.clientY-rect.top };
       if(photoState.calib===null){ photoState.calib = pt; return; }
-      if(photoState.calib && !photoState.measureTmp){ // second calib point
-        const px = dist(photoState.calib, pt); const ft=parseFloat(prompt('Enter feet for calibration:','10'))||10; ph.measurements=ph.measurements||[]; ph.scalePxPerFt = px/ft; photoState.calib=null; drawPhotoMeasurements(); return;
+      if(photoState.calib && !photoState.measureTmp){
+        const px = dist(photoState.calib, pt); const ft=parseFloat(prompt('Enter feet for calibration:','10'))||10;
+        ph.measurements=ph.measurements||[]; ph.scalePxPerFt = px/ft; photoState.calib=null; drawPhotoMeasurements(); return;
       }
     });
 
     let photoMeasureFirst=null;
-    photoImg.addEventListener('click',(e)=>{
+    on(photoImg,'click',(e)=>{
       if(!photoState.measure) return; const ph=photoState.pin?.photos[photoState.idx]; if(!ph) return;
       const rect = photoImg.getBoundingClientRect(); const pt={x:e.clientX-rect.left,y:e.clientY-rect.top};
       if(!photoMeasureFirst){ photoMeasureFirst=pt; return; }
-      const m={id:id(), kind:'photo', points:[photoMeasureFirst, pt]}; if(ph.scalePxPerFt){ m.feet=dist(photoMeasureFirst,pt)/ph.scalePxPerFt; }
-      ph.measurements=ph.measurements||[]; ph.measurements.push(m); photoMeasureFirst=null; drawPhotoMeasurements(); photoMeaCount.textContent=ph.measurements.length;
+      const m={id:id(), kind:'photo', points:[photoMeasureFirst, pt]};
+      if(ph.scalePxPerFt){ m.feet=dist(photoMeasureFirst,pt)/ph.scalePxPerFt; }
+      ph.measurements=ph.measurements||[]; ph.measurements.push(m); photoMeasureFirst=null; drawPhotoMeasurements(); $('photoMeaCount').textContent=ph.measurements.length;
     });
 
     function drawPhotoMeasurements(){
@@ -490,30 +501,29 @@
     function showPhoto(){ const ph=photoState.pin.photos[photoState.idx]; photoImg.src=ph.dataUrl; photoPinId.textContent=photoState.pin.id; photoName.textContent=ph.name; photoMeaCount.textContent=(ph.measurements?.length||0); drawPhotoMeasurements(); }
     function closePhotoModal(){ photoModal.style.display='none'; }
 
-    /****************
-     * OCR (view)   *
-     ****************/
+    /***********
+     * OCR     *
+     ***********/
     async function ocrCurrentView(){
       const canvas = document.createElement('canvas');
-      // draw current stage image to canvas
-      const img=stageImage; if(!img.src){ alert('No page image.'); return; }
-      const w=img.naturalWidth, h=img.naturalHeight; canvas.width=w; canvas.height=h; const ctx=canvas.getContext('2d'); ctx.drawImage(img,0,0);
+      const img=stageImage; if(!img || !img.src){ alert('No page image.'); return; }
+      const w=img.naturalWidth||img.width, h=img.naturalHeight||img.height; canvas.width=w; canvas.height=h; const ctx=canvas.getContext('2d'); ctx.drawImage(img,0,0);
       const { data: { text } } = await Tesseract.recognize(canvas, 'eng');
-      let out = text.trim(); if(!out){ alert('No text recognized.'); return; }
+      let out = (text||'').trim(); if(!out){ alert('No text recognized.'); return; }
       const head = out.slice(0,200);
       try { await navigator.clipboard.writeText(out); } catch{}
       inputSearch.value=head; renderPinsList(); alert('OCR done. First 200 chars placed in search. Full text copied to clipboard.');
     }
 
     /****************
-     * Rendering     *
+     * Rendering    *
      ****************/
     function renderAll(){ renderThumbs(); renderStage(); renderPins(); renderPinsList(); renderProjectLabel(); drawMeasurements(); toggleStrict.checked=!!project.settings.strictRules; toggleField.checked=!!project.settings.fieldMode; }
     function renderProjectLabel(){ projectLabel.textContent = `Project: ${project.name} • Pages: ${project.pages.length} • Pins: ${project.pages.reduce((a,p)=>a+(p.pins?.length||0),0)}`; }
 
     function renderThumbs(){
       thumbsEl.innerHTML='';
-      project.pages.forEach((pg,idx)=>{
+      project.pages.forEach((pg)=>{
         const d=document.createElement('div'); d.className='thumb'+(project._pageId===pg.id?' active':'');
         const im=document.createElement('img'); im.src=pg.blobUrl; d.appendChild(im);
         const inp=document.createElement('input'); inp.value=pg.name; inp.oninput=()=>{ pg.name=inp.value; pg.updatedAt=Date.now(); saveProject(project); renderProjectLabel(); }; d.appendChild(inp);
@@ -524,9 +534,10 @@
 
     function renderStage(){ const pg=currentPage(); if(!pg){ stageImage.removeAttribute('src'); return; } stageImage.src=pg.blobUrl; }
 
-    function renderPins(){ pinLayer.innerHTML=''; const pg=currentPage(); if(!pg) return;
+    function renderPins(){
+      pinLayer.innerHTML=''; const pg=currentPage(); if(!pg) return;
       fieldMode=!!project.settings.fieldMode;
-      const q = inputSearch.value.toLowerCase(); const typeFilter=filterType.value;
+      const q = (inputSearch.value||'').toLowerCase(); const typeFilter=filterType.value;
       (pg.pins||[]).forEach(p=>{
         if(typeFilter && p.sign_type!==typeFilter) return;
         const line = [p.sign_type,p.room_number,p.room_name,p.building,p.level,p.notes].join(' ').toLowerCase(); if(q && !line.includes(q)) return;
@@ -536,83 +547,161 @@
       updatePinDetails();
     }
 
-    function renderPinsList(){ pinList.innerHTML=''; const pg=currentPage(); if(!pg) return; const q=inputSearch.value.toLowerCase(); const typeFilter=filterType.value;
+    function renderPinsList(){
+      pinList.innerHTML=''; const pg=currentPage(); if(!pg) return; const q=(inputSearch.value||'').toLowerCase(); const typeFilter=filterType.value;
       (pg.pins||[]).forEach(p=>{
         const line=[p.sign_type,p.room_number,p.room_name,p.building,p.level,p.notes].join(' ').toLowerCase(); if(q && !line.includes(q)) return; if(typeFilter && p.sign_type!==typeFilter) return;
         const row=document.createElement('div'); row.className='item';
         const cb=document.createElement('input'); cb.type='checkbox'; cb.dataset.id=p.id; row.appendChild(cb);
-        const txt=document.createElement('div'); txt.innerHTML=`<strong>${p.sign_type}</strong> • ${p.room_number||'-'} ${p.room_name||''} <span class="muted">[${p.building||'-'}/${p.level||'-'}]</span>`; row.appendChild(txt);
+        const txt=document.createElement('div'); txt.innerHTML=`<strong>${p.sign_type||'-'}</strong> • ${p.room_number||'-'} ${p.room_name||''} <span class="muted">[${p.building||'-'}/${p.level||'-'}]</span>`; row.appendChild(txt);
         const go=document.createElement('button'); go.textContent='Go'; go.onclick=()=>{ selectPin(p.id); }; row.appendChild(go);
         pinList.appendChild(row);
       });
     }
 
-    function updatePinDetails(){ const p=selectedPin();
+    function updatePinDetails(){
+      const p=selectedPin();
       selId.textContent=p? p.id : 'None';
       fieldType.value=p?.sign_type||''; fieldRoomNum.value=p?.room_number||''; fieldRoomName.value=p?.room_name||''; fieldBuilding.value=p?.building||''; fieldLevel.value=p?.level||''; fieldNotes.value=p?.notes||'';
       posLabel.textContent=p? pctLabel(p.x_pct,p.y_pct) : '—'; gpsLabel.textContent=(p&&p.gps)? `${p.gps.lat}, ${p.gps.lon}` : '—';
       renderWarnings();
     }
 
-    function renderWarnings(){ warnsEl.innerHTML=''; const p=selectedPin(); if(!p) return; const list=[];
+    function renderWarnings(){
+      warnsEl.innerHTML=''; const p=selectedPin(); if(!p) return; const list=[];
       if(['Callbox','Evac','Hall Direct'].includes(p.sign_type) && (p.room_name||'').toUpperCase()!=='ELEV. LOBBY'){ list.push('Tip: Room name usually “ELEV. LOBBY”.'); }
       const rn=(p.room_name||'').toUpperCase(); if((/ELECTRICAL|DATA/).test(rn) && p.sign_type!=='BOH'){ list.push('Recommended BOH for ELECTRICAL/DATA rooms.'); }
       list.forEach(s=>{ const t=document.createElement('span'); t.className='tag warn'; t.textContent=s; warnsEl.appendChild(t); });
     }
 
-    function selectPin(idv){ project._sel=idv; saveProject(project); renderPins(); const el=[...pinLayer.children].find(x=>x.dataset.id===idv); if(el){ el.scrollIntoView({block:'center', inline:'center', behavior:'smooth'}); }
-      const p=findPin(idv); if(p){ // jump to its page if exists
-        const pgId=project.pages.find(pg=>pg.pins.includes(p))?.id; if(pgId && project._pageId!==pgId){ project._pageId=pgId; saveProject(project); renderStage(); renderPins(); drawMeasurements(); }
+    function selectPin(idv){
+      project._sel=idv; saveProject(project); renderPins();
+      const el=[...pinLayer.children].find(x=>x.dataset.id===idv); if(el){ el.scrollIntoView({block:'center', inline:'center', behavior:'smooth'}); }
+      const p=findPin(idv); if(p){
+        const pgId=project.pages.find(pg=>pg.pins.includes(p))?.id;
+        if(pgId && project._pageId!==pgId){ project._pageId=pgId; saveProject(project); renderStage(); renderPins(); drawMeasurements(); }
       }
     }
 
     function clearSelection(){ project._sel=null; saveProject(project); updatePinDetails(); }
 
     /****************
-     * CSV / XLSX    *
+     * CSV / XLSX   *
      ****************/
-    function exportCSV(){ const rows = toRows(); const csv=[Object.keys(rows[0]||{}).join(','), ...rows.map(r=>Object.values(r).map(v=>csvEscape(v)).join(','))].join('\n'); downloadText(project.name.replace(/\W+/g,'_')+"_signage.csv", csv); }
+    function exportCSV(){ const rows = toRows(); const csv=[Object.keys(rows[0]||{}).join(','), ...rows.map(r=>Object.values(r).map(v=>csvEscape(v)).join(','))].join('\\n'); downloadText(project.name.replace(/\\W+/g,'_')+"_signage.csv", csv); }
 
-    function exportXLSX(){ const rows = toRows(); const wb = XLSX.utils.book_new(); const info=[
-      ['Project', project.name], ['Exported', new Date().toLocaleString()], ['Total Signs', rows.length], ['Total Pages', project.pages.length]
-    ];
-    // quick breakdown
-    const counts = {}; rows.forEach(r=> counts[r.sign_type]=(counts[r.sign_type]||0)+1 ); info.push([]); info.push(['Breakdown']); Object.entries(counts).forEach(([k,v])=> info.push([k,v]));
-    const wsInfo = XLSX.utils.aoa_to_sheet(info);
-    const ws = XLSX.utils.json_to_sheet(rows, {header: Object.keys(rows[0]||{})});
-    XLSX.utils.book_append_sheet(wb, wsInfo, 'Project Info');
-    XLSX.utils.book_append_sheet(wb, ws, 'Signage');
-    const out = XLSX.write(wb, {bookType:'xlsx', type:'array'});
-    downloadFile(project.name.replace(/\W+/g,'_')+'_signage.xlsx', new Blob([out], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+    function exportXLSX(){
+      const rows = toRows(); const wb = XLSX.utils.book_new();
+      const info=[[ 'Project', project.name ], [ 'Exported', new Date().toLocaleString() ], [ 'Total Signs', rows.length ], [ 'Total Pages', project.pages.length ]];
+      const counts = {}; rows.forEach(r=> counts[r.sign_type]=(counts[r.sign_type]||0)+1 ); info.push([]); info.push(['Breakdown']); Object.entries(counts).forEach(([k,v])=> info.push([k,v]));
+      const wsInfo = XLSX.utils.aoa_to_sheet(info);
+      const ws = XLSX.utils.json_to_sheet(rows, {header: Object.keys(rows[0]||{})});
+      XLSX.utils.book_append_sheet(wb, wsInfo, 'Project Info'); XLSX.utils.book_append_sheet(wb, ws, 'Signage');
+      const out = XLSX.write(wb, {bookType:'xlsx', type:'array'});
+      downloadFile(project.name.replace(/\\W+/g,'_')+'_signage.xlsx', new Blob([out], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
     }
 
-    async function exportZIP(){ const rows=toRows(); const zip=new JSZip(); zip.file('signage.csv', [Object.keys(rows[0]||{}).join(','), ...rows.map(r=>Object.values(r).map(v=>csvEscape(v)).join(','))].join('\n'));
+    async function exportZIP(){
+      const rows=toRows(); const zip=new JSZip();
+      zip.file('signage.csv', [Object.keys(rows[0]||{}).join(','), ...rows.map(r=>Object.values(r).map(v=>csvEscape(v)).join(','))].join('\\n'));
       // photos
       project.pages.forEach(pg=> pg.pins.forEach(pin=> pin.photos?.forEach((ph, idx)=>{ const folder=zip.folder(`photos/${pin.id}`); folder.file(ph.name||`photo_${idx+1}.png`, dataURLtoArrayBuffer(ph.dataUrl)); })) );
-      const blob = await zip.generateAsync({type:'blob'}); downloadFile(project.name.replace(/\W+/g,'_')+'_export.zip', blob);
+      const blob = await zip.generateAsync({type:'blob'}); downloadFile(project.name.replace(/\\W+/g,'_')+'_export.zip', blob);
     }
 
-    function importCSV(text){ const lines = text.split(/\r?\n/).filter(Boolean); const hdr=lines[0].split(',').map(h=>h.trim()); commit();
+    function importCSV(text){
+      const lines = text.split(/\\r?\\n/).filter(Boolean);
+      if(lines.length<2) return;
+      const hdr=lines[0].split(',').map(h=>h.trim()); commit();
       for(let i=1;i<lines.length;i++){
         const cells = parseCsvLine(lines[i]); const row={}; hdr.forEach((h,idx)=> row[h]=cells[idx]||'');
-        const p = makePin(parseFloat(row.x_pct)||50, parseFloat(row.y_pct)||50); p.sign_type=row.sign_type||''; p.room_number=row.room_number||''; p.room_name=row.room_name||''; p.building=row.building||''; p.level=row.level||''; p.notes=row.notes||''; if(row.lat && row.lon) p.gps={lat:+row.lat, lon:+row.lon}; currentPage().pins.push(p);
+        const p = makePin(parseFloat(row.x_pct)||50, parseFloat(row.y_pct)||50);
+        p.sign_type=row.sign_type||''; p.room_number=row.room_number||''; p.room_name=row.room_name||''; p.building=row.building||''; p.level=row.level||''; p.notes=row.notes||'';
+        if(row.lat && row.lon) p.gps={lat:+row.lat, lon:+row.lon};
+        currentPage().pins.push(p);
       }
       saveProject(project); renderPins(); renderPinsList(); alert('Imported rows into current page.');
     }
 
-    function toRows(){ const rows=[]; project.pages.forEach(pg=> (pg.pins||[]).forEach(p=> rows.push({
-      id:p.id, sign_type:p.sign_type||'', room_number:p.room_number||'', room_name:p.room_name||'', building:p.building||'', level:p.level||'', x_pct:fix(p.x_pct), y_pct:fix(p.y_pct), notes:p.notes||'', lat:p.gps?.lat||'', lon:p.gps?.lon||'', page_name:pg.name, last_edited: new Date(p.lastEdited||project.updatedAt).toISOString()
-    })) );
-      // sorting: building, level, room_number (natural-ish)
+    function toRows(){
+      const rows=[]; project.pages.forEach(pg=> (pg.pins||[]).forEach(p=> rows.push({
+        id:p.id, sign_type:p.sign_type||'', room_number:p.room_number||'', room_name:p.room_name||'', building:p.building||'', level:p.level||'', x_pct:fix(p.x_pct), y_pct:fix(p.y_pct), notes:p.notes||'', lat:p.gps?.lat||'', lon:p.gps?.lon||'', page_name:pg.name, last_edited: new Date(p.lastEdited||project.updatedAt).toISOString()
+      })) );
       rows.sort((a,b)=> (a.building||'').localeCompare(b.building||'') || (a.level||'').localeCompare(b.level||'') || a.room_number.localeCompare(b.room_number, undefined, {numeric:true,sensitivity:'base'}) );
       return rows;
     }
 
-    /****************
-     * Helpers       *
-     ****************/
+    /***************
+     * Helpers     *
+     ***************/
     const projectContext={building:'', level:''};
 
     function id(){ return Math.random().toString(36).slice(2,10); }
     function newProject(name){ return { id:id(), name, createdAt:Date.now(), updatedAt:Date.now(), pages:[], settings:{ colorsByType:SIGN_TYPES, fieldMode:false, strictRules:false } } }
-    function currentPage(){ if(!project._pageId && project.pag
+    function currentPage(){ if(!project._pageId && project.pages[0]) project._pageId=project.pages[0].id; return project.pages.find(p=>p.id===project._pageId); }
+    function makePin(x_pct,y_pct){ return { id:id(), sign_type:'', room_number:'', room_name:'', building: inputBuilding.value||projectContext.building||'', level: inputLevel.value||projectContext.level||'', x_pct, y_pct, notes:'', photos:[], lastEdited:Date.now() } }
+    function findPin(idv){ for(const pg of project.pages){ const f=pg.pins.find(p=>p.id===idv); if(f) return f; } return null; }
+    function checkedPinIds(){ return [...pinList.querySelectorAll('input[type="checkbox"]:checked')].map(cb=>cb.dataset.id); }
+
+    function selectProject(pid){ project = projects.find(p=>p.id===pid); if(!project) return; localStorage.setItem('survey:lastOpenProjectId', pid); renderAll(); }
+    function saveProject(p){ p.updatedAt=Date.now(); const i=projects.findIndex(x=>x.id===p.id); if(i>=0) projects[i]=p; else projects.push(p); localStorage.setItem('survey:projects', JSON.stringify(projects)); projects = loadProjects(); }
+    function loadProjects(){ try{ return JSON.parse(localStorage.getItem('survey:projects')||'[]'); }catch{return []} }
+
+    function addImagePage(url, name){ const pg={ id:id(), name:name||'Image', kind:'image', blobUrl:url, pins:[], measurements:[], updatedAt:Date.now() }; project.pages.push(pg); if(!project._pageId) project._pageId=pg.id; saveProject(project); }
+    async function addPdfPages(file){
+      const url=URL.createObjectURL(file);
+      const pdf=await pdfjsLib.getDocument(url).promise;
+      for(let i=1;i<=pdf.numPages;i++){
+        const page=await pdf.getPage(i);
+        const viewport=page.getViewport({scale:2});
+        const canvas=document.createElement('canvas'); canvas.width=viewport.width; canvas.height=viewport.height;
+        const ctx=canvas.getContext('2d'); await page.render({canvasContext:ctx, viewport}).promise;
+        const data=canvas.toDataURL('image/png');
+        const pg={ id:id(), name:`${file.name.replace(/\\.[^.]+$/,'')} · p${i}`, kind:'pdf', pdfPage:i, blobUrl=data, pins:[], measurements:[], updatedAt:Date.now() }; project.pages.push(pg);
+      }
+      if(!project._pageId && project.pages[0]) project._pageId=project.pages[0].id; saveProject(project);
+    }
+
+    function toPctCoords(e){ const rect=stageImage.getBoundingClientRect(); const x=Math.min(Math.max(0,e.clientX-rect.left),rect.width); const y=Math.min(Math.max(0,e.clientY-rect.top),rect.height); return { x_pct: +(x/rect.width*100).toFixed(3), y_pct:+(y/rect.height*100).toFixed(3) } }
+    function toLocal(e){ const rect=stageImage.getBoundingClientRect(); return { x: e.clientX-rect.left, y: e.clientY-rect.top } }
+    function toScreen(pt){ const rect=stageImage.getBoundingClientRect(); return { x: rect.left+pt.x, y: rect.top+pt.y } }
+    function pctLabel(x,y){ return `${(x||0).toFixed(2)}%, ${(y||0).toFixed(2)}%`; }
+    function dist(a,b){ const dx=a.x-b.x, dy=a.y-b.y; return Math.sqrt(dx*dx+dy*dy); }
+    function fix(n){ return typeof n==='number'? +Number(n||0).toFixed(3):'' }
+
+    function csvEscape(v){ const s=(v==null? '': String(v)); if(/[",\\n]/.test(s)) return '"'+s.replace(/"/g,'""')+'"'; return s; }
+    function parseCsvLine(line){ const out=[]; let cur=''; let i=0; let inQ=false; while(i<line.length){ const ch=line[i++]; if(inQ){ if(ch==='"'){ if(line[i]==='"'){ cur+='"'; i++; } else { inQ=false; } } else { cur+=ch; } } else { if(ch===','){ out.push(cur); cur=''; } else if(ch==='"'){ inQ=true; } else { cur+=ch; } } } out.push(cur); return out; }
+    function fileToDataURL(file){ return new Promise((res,rej)=>{ const fr=new FileReader(); fr.onload=()=>res(fr.result); fr.onerror=rej; fr.readAsDataURL(file); }); }
+    function dataURLtoArrayBuffer(dataURL){ const bstr=atob(dataURL.split(',')[1]); const len=bstr.length; const buf=new Uint8Array(len); for(let i=0;i<len;i++) buf[i]=bstr.charCodeAt(i); return buf; }
+    function dataURLtoBlob(dataURL){ const arr=dataURL.split(','); const mime=(arr[0].match(/:(.*?);/)|[])[1]||'image/png'; const ab=dataURLtoArrayBuffer(dataURL); return new Blob([ab],{type:mime}); }
+    function downloadText(name, text){ downloadFile(name, new Blob([text],{type:'text/plain'})); }
+    function downloadFile(name, blob){ const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 1000); }
+
+    // Undo/Redo
+    function snapshot(){ return JSON.stringify(project); }
+    function loadSnapshot(s){ project=JSON.parse(s); const i=projects.findIndex(p=>p.id===project.id); if(i>=0) projects[i]=project; else projects.push(project); localStorage.setItem('survey:projects', JSON.stringify(projects)); localStorage.setItem('survey:lastOpenProjectId', project.id); }
+    function commit(){ UNDO.push(snapshot()); if(UNDO.length>MAX_UNDO) UNDO.shift(); REDO.length=0; }
+    function undo(){ if(!UNDO.length) return; REDO.push(snapshot()); const s=UNDO.pop(); loadSnapshot(s); renderAll(); }
+    function redo(){ if(!REDO.length) return; UNDO.push(snapshot()); const s=REDO.pop(); loadSnapshot(s); renderAll(); }
+
+    // Initial render & observers
+    renderAll();
+    const ro=new ResizeObserver(()=>{ measureSvg.setAttribute('width', stage.clientWidth); measureSvg.setAttribute('height', stage.clientHeight); }); ro.observe(stage);
+
+    // Keyboard shortcuts
+    window.addEventListener('keydown',(e)=>{
+      if((e.ctrlKey||e.metaKey) && !e.shiftKey && e.key.toLowerCase()==='z'){ e.preventDefault(); undo(); }
+      if((e.ctrlKey||e.metaKey) && e.shiftKey && e.key.toLowerCase()==='z'){ e.preventDefault(); redo(); }
+      if(e.key==='Delete'){ const p=selectedPin(); if(p){ commit(); currentPage().pins=currentPage().pins.filter(x=>x.id!==p.id); saveProject(project); renderPins(); renderPinsList(); clearSelection(); } }
+      if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)){ const p=selectedPin(); if(!p) return; e.preventDefault(); commit(); const delta = project.settings.fieldMode? 0.5 : 0.2; if(e.key==='ArrowUp') p.y_pct=Math.max(0,p.y_pct-delta); if(e.key==='ArrowDown') p.y_pct=Math.min(100,p.y_pct+delta); if(e.key==='ArrowLeft') p.x_pct=Math.max(0,p.x_pct-delta); if(e.key==='ArrowRight') p.x_pct=Math.min(100,p.x_pct+delta); p.lastEdited=Date.now(); saveProject(project); renderPins(); updatePinDetails(); }
+    });
+  });
+  </script>
+</body>
+</html>
+"""
+# Write file
+with open('/mnt/data/index.html', 'w', encoding='utf-8') as f:
+    f.write(html)
+
+'/mnt/data/index.html'
