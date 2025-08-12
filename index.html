@@ -1,359 +1,670 @@
-<!doctype html>
-<html lang="en"><head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
-<title>Signage Survey (Images + PDF)</title>
-<meta name="theme-color" content="#0ea5e9">
-
-<!-- pdf.js for converting PDF pages to images on upload (works on phone, no build tools) -->
-<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@4.7.76/build/pdf.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@4.7.76/build/pdf.worker.min.js"></script>
-
-<style>
-:root{--bg:#0b1117;--panel:#0f172a;--text:#e5e7eb;--muted:#94a3b8}
-*{box-sizing:border-box}
-html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font:14px/1.4 system-ui,Segoe UI,Roboto,Helvetica,Arial}
-button,input,select,textarea{font:inherit}
-.app{display:grid;grid-template-rows:auto 1fr;height:100%}
-.toolbar{display:flex;flex-wrap:wrap;gap:.5rem;padding:.75rem;border-bottom:1px solid #1f2937;background:var(--panel);position:sticky;top:0;z-index:5}
-.btn{background:#1f2937;border:1px solid #334155;color:var(--text);padding:.5rem .75rem;border-radius:.6rem;cursor:pointer}
-.btn:hover{background:#273244}
-.field{background:#0b1220;border:1px solid #1f2a3f;color:var(--text);padding:.4rem .55rem;border-radius:.5rem}
-.layout{display:grid;grid-template-columns:220px 1fr 320px;gap:0;height:100%}
-.left{border-right:1px solid #1f2937;background:#0c1422;overflow:auto}
-.center{position:relative;overflow:auto;background:#0a0f18}
-.right{border-left:1px solid #1f2937;background:#0c1422;overflow:auto;padding:12px}
-.thumb{padding:10px;border-bottom:1px solid #101826;display:flex;align-items:center;gap:8px}
-.thumb-btn{background:#162238;border:1px solid #253046;border-radius:6px;padding:2px 6px;color:#cbd5e1;font-size:12px}
-.thumb.active{background:#0d1b2b}
-.thumb .name{color:#d1d5db;font-size:12px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.canvas-wrap{position:relative;margin:0 auto;max-width:2400px}
-.canvas-wrap img{width:100%;height:auto;display:block}
-.tap-hint{position:absolute;left:8px;bottom:8px;background:rgba(0,0,0,.5);border:1px solid #263042;border-radius:8px;padding:6px 8px;font-size:12px;color:#cbd5e1}
-.pin{position:absolute;transform:translate(-50%,-50%);padding:.2rem .45rem;border-radius:999px;color:#fff;font-weight:700;font-size:12px;cursor:pointer;border:1px solid rgba(255,255,255,.25);box-shadow:0 0 0 2px rgba(0,0,0,.25)}
-.pin.sel{outline:2px solid #fde047}
-.group{margin-bottom:10px}.label{display:block;color:var(--muted);font-size:12px;margin-bottom:4px}
-.input,.select,.textarea{width:100%;background:#0b1220;border:1px solid #1f2a3f;color:#e5e7eb;padding:.45rem .55rem;border-radius:.5rem}
-.textarea{min-height:60px;resize:vertical}
-.cols{display:grid;grid-template-columns:1fr 1fr;gap:.5rem}
-.hidden{display:none}
-.tips{background:#0b1220;border:1px solid #1f2a3f;border-radius:.6rem;padding:.5rem}
-.footer-space{height:24px}
-.small{font-size:12px;color:#94a3b8}
-</style>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Signage Survey – Single‑File (GitHub Pages)</title>
+  <style>
+    :root{
+      --bg:#0b1020;--panel:#11162a;--soft:#1a2240;--text:#e6e9f5;--muted:#aab0c6;--accent:#4cc9f0;--ok:#22c55e;--warn:#f59e0b;--err:#ef4444;
+    }
+    html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+    .app{display:grid;grid-template-rows:auto 1fr; height:100%}
+    .toolbar{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;padding:.6rem .8rem;background:linear-gradient(180deg,#111936,#0d142d);border-bottom:1px solid #263056;position:sticky;top:0;z-index:5}
+    .toolbar .group{display:flex;gap:.4rem;align-items:center;background:#0f1731;border:1px solid #263056;border-radius:10px;padding:.35rem .45rem}
+    button, .btn{background:#1b2242;border:1px solid #2c3766;color:var(--text);padding:.45rem .6rem;border-radius:8px;cursor:pointer}
+    button:hover{background:#232d57}
+    input, select{background:#0e1631;border:1px solid #2a355f;color:var(--text);padding:.45rem .55rem;border-radius:8px}
+    .layout{display:grid;grid-template-columns:220px 1fr 320px; gap:.75rem; padding:.75rem; height:100%; box-sizing:border-box}
+    .panel{background:var(--panel); border:1px solid #23305b; border-radius:14px; overflow:hidden; display:flex;flex-direction:column; min-height:0}
+    .panel h3{margin:0;padding:.6rem .75rem;border-bottom:1px solid #23305b;background:#121938;font-size:.95rem;color:#c9d2ff}
+    .thumbs{padding:.5rem;overflow:auto;display:grid;gap:.5rem}
+    .thumb{background:#0f1733;border:1px solid #263056;border-radius:10px;padding:.35rem;cursor:pointer}
+    .thumb.active{outline:2px solid var(--accent)}
+    .thumb img{width:100%;height:110px;object-fit:cover;border-radius:6px;background:#060a18}
+    .thumb input{width:100%;margin-top:.35rem;font-size:.8rem}
+    .stage{position:relative; background:#0a0f22; border-radius:14px; border:1px dashed #2b3562; display:flex; align-items:center; justify-content:center; overflow:hidden}
+    .stage-inner{position:relative; width:100%; height:100%; display:flex; align-items:center; justify-content:center}
+    #stageImage{max-width:100%; max-height:100%; display:block}
+    #pinLayer{position:absolute; inset:0; pointer-events:none}
+    .pin{position:absolute; transform:translate(-50%, -100%); padding:.18rem .35rem; font-size:.75rem; border-radius:999px; border:1px solid rgba(0,0,0,.35); color:#0b0f1d; font-weight:700; box-shadow:0 3px 10px rgba(0,0,0,.35); pointer-events:auto}
+    .pin.selected{outline:2px solid #fff}
+    .measure{position:absolute; pointer-events:none}
+    .measure line{stroke-width:3}
+    .measure text{fill:#fff; font-size:12px; paint-order:stroke; stroke:#000; stroke-width:3}
+    .right{padding:0; overflow:auto}
+    .section{padding:.6rem .75rem; border-bottom:1px solid #23305b}
+    .grid{display:grid; grid-template-columns: 1fr 1fr; gap:.5rem}
+    .row{display:grid; grid-template-columns:110px 1fr; gap:.5rem; align-items:center; margin:.35rem 0}
+    .pill{display:inline-flex; gap:.35rem; align-items:center; padding:.25rem .5rem; border-radius:999px; border:1px solid #27335f; background:#0e1634; color:#c5d0ff; font-size:.8rem}
+    .list{max-height:280px; overflow:auto; display:grid; gap:.35rem}
+    .list .item{display:grid; grid-template-columns:20px 1fr auto; align-items:center; gap:.5rem; padding:.35rem .45rem; border:1px solid #27335f; border-radius:10px; background:#0e1634}
+    .muted{color:var(--muted)}
+    .warn{color:var(--warn)}
+    .ok{color:var(--ok)}
+    .err{color:var(--err)}
+    .footer-note{font-size:.8rem;color:#93a2d8;padding:.5rem .75rem}
+    .hidden{display:none}
+    .modal{position:fixed; inset:0; background:rgba(0,0,0,.6); display:none; align-items:center; justify-content:center; z-index:50}
+    .modal .box{background:#0f1733; border:1px solid #2b3566; border-radius:14px; width:min(900px,95vw); height:min(80vh,95vh); display:flex; flex-direction:column}
+    .modal .box header{display:flex; justify-content:space-between; align-items:center; padding:.6rem .9rem; border-bottom:1px solid #2b3566}
+    .modal .box main{flex:1; display:grid; grid-template-columns: 1fr 280px}
+    .modal .viewer{position:relative; background:#060a18; display:flex; align-items:center; justify-content:center}
+    .modal .viewer img{max-width:100%; max-height:100%}
+    .modal .side{border-left:1px solid #2b3566; padding:.6rem}
+    .chips{display:flex; flex-wrap:wrap; gap:.35rem}
+    .tag{font-size:.75rem; padding:.15rem .45rem; border-radius:999px; background:#18224a; border:1px solid #2b3566}
+    .help{font-size:.8rem; color:#97a3d9}
+  </style>
+  <!-- Libraries via CDN (single-file convenience). If you later want NO CDN, we can inline or bundle. -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" integrity="sha512-JO0fm7k1kQ8Lz+n7D0wB0mQfH7C9O6qdgH8Kc2Q5wHFSQdQvva4a6tqZVx9v1h7zJmY5P5bD3GgI0p9P+Zp2gw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" integrity="sha512-vl+kqZq4iGiQmG9Jz3VY/e0T9qA+co1S9CJBtJ6LTtTcv6M9+fG9R7kzW/6Gk5CkZkzwpZ6T0T0hO7rQ+9V2qg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.0/dist/tesseract.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js" integrity="sha512-4mQjFj6mP3tJ5m6m9Y0mQW0p8P3dR9Q0X1tq3VhXj6J9Lk1j2m0gH0yLqc3w4uKj7e0UuKz7i9m2y0mQ6fIkgw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script>
+    // Configure pdf.js worker (from same CDN version)
+    if (window['pdfjsLib']) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+    }
+  </script>
 </head>
 <body>
-<div class="app">
-  <div class="toolbar">
-    <button class="btn" id="newProject">New</button>
-    <select class="field" id="openProject" title="Open Project"></select>
-    <button class="btn" id="renameProject">Rename</button>
-    <button class="btn" id="saveAs">Save As…</button>
-
-    <input class="hidden" type="file" id="upload" accept="application/pdf,image/*" multiple>
-    <button class="btn" id="uploadBtn">Upload PDF / Images</button>
-
-    <span style="flex:1 1 auto"></span>
-
-    <input class="field" id="bldg" placeholder="Building" style="width:120px">
-    <input class="field" id="level" placeholder="Level" style="width:100px">
-
-    <button class="btn" id="exportCsv">Export CSV</button>
-
-    <input class="field" id="search" placeholder="Search…" style="min-width:160px">
-    <select class="field" id="filterType"></select>
-
-    <button class="btn" id="clearPage">Clear Page Pins</button>
-  </div>
-
-  <div class="layout">
-    <div class="left" id="thumbs"></div>
-    <div class="center"><div class="canvas-wrap" id="canvas"></div></div>
-    <div class="right" id="rightPanel">
-      <h3 style="margin:6px 0 10px 0">Sign Details</h3>
-      <div class="label small" id="noSel">Tap the image to drop a pin, or select one.</div>
-      <div id="pinForm" class="hidden">
-        <div class="group"><label class="label">Sign Type</label><select id="f_type" class="select"></select></div>
-        <div class="cols">
-          <div class="group"><label class="label">Room #</label><input id="f_roomnum" class="input"></div>
-          <div class="group"><label class="label">Level</label><input id="f_level" class="input"></div>
-        </div>
-        <div class="group"><label class="label">Room Name</label><input id="f_roomname" class="input"></div>
-        <div class="group"><label class="label">Building</label><input id="f_building" class="input"></div>
-        <div class="group"><label class="label">Notes</label><textarea id="f_notes" class="textarea"></textarea></div>
-        <div id="posReadout" class="small"></div>
-        <div class="group">
-          <label class="label">Add Photo</label>
-          <input type="file" id="f_photo" accept="image/*" capture="environment">
-          <div id="photoRow" style="display:flex; gap:6px; flex-wrap:wrap; margin-top:6px"></div>
-        </div>
-        <div class="group">
-          <button class="btn" id="duplicate">Duplicate</button>
-          <button class="btn" id="delete">Delete</button>
-        </div>
-        <div class="tips"><div class="small">
-          Soft rules only. Electrical/Data typically BOH. Exits allowed on any level. Hall Direct uses plan text.
-        </div></div>
+  <div class="app">
+    <div class="toolbar">
+      <div class="group">
+        <button id="btnNew">New Project</button>
+        <button id="btnOpen">Open Project</button>
+        <button id="btnSaveAs">Save As…</button>
       </div>
-      <div class="footer-space"></div>
+      <div class="group">
+        <input type="file" id="inputUpload" accept="image/*,application/pdf" multiple class="hidden" />
+        <button id="btnUpload">Upload Map / Plan</button>
+        <label class="pill">Building <input id="inputBuilding" style="width:120px" placeholder="A"/></label>
+        <label class="pill">Level <input id="inputLevel" style="width:80px" placeholder="1"/></label>
+      </div>
+      <div class="group">
+        <button id="btnExportCSV">Export CSV</button>
+        <button id="btnExportXLSX">Export Excel</button>
+        <button id="btnExportZIP">Export ZIP (+photos)</button>
+        <input type="file" id="inputImportCSV" accept="text/csv" class="hidden" />
+        <button id="btnImportCSV">Import CSV</button>
+      </div>
+      <div class="group">
+        <button id="btnOCR">OCR this View</button>
+        <button id="btnCalibrate">Calibrate Scale</button>
+        <button id="btnMeasureToggle">Measuring: OFF</button>
+        <button id="btnMeasureReset">Reset Measure</button>
+      </div>
+      <div class="group">
+        <button id="btnUndo">Undo</button>
+        <button id="btnRedo">Redo</button>
+      </div>
+      <div class="group">
+        <input id="inputSearch" placeholder="Search…" style="width:180px"/>
+        <select id="filterType"><option value="">All Types</option></select>
+        <label class="pill"><input type="checkbox" id="toggleStrict"> Auto-normalize rules</label>
+        <label class="pill"><input type="checkbox" id="toggleField"> Field Mode</label>
+      </div>
+      <div class="group">
+        <button id="btnClearPins">Clear All Pins</button>
+        <button id="btnAddPin">Add Pin</button>
+      </div>
+      <div class="muted" id="projectLabel" style="margin-left:auto">—</div>
+    </div>
+
+    <div class="layout">
+      <div class="panel">
+        <h3>Pages</h3>
+        <div class="thumbs" id="thumbs"></div>
+        <div class="footer-note">Tip: Click a page to switch. Rename below each thumbnail.</div>
+      </div>
+
+      <div class="panel stage" id="stage">
+        <div class="stage-inner">
+          <img id="stageImage" alt="No page yet" />
+          <svg id="measureSvg" class="measure" width="100%" height="100%"></svg>
+          <div id="pinLayer"></div>
+        </div>
+      </div>
+
+      <div class="panel right">
+        <h3>Sign Details</h3>
+        <div class="section" id="pinDetails">
+          <div class="row"><div>Selected:</div><div id="selId" class="muted">None</div></div>
+          <div class="row"><div>Sign Type</div>
+            <select id="fieldType"></select></div>
+          <div class="row"><div>Room #</div><input id="fieldRoomNum"/></div>
+          <div class="row"><div>Room Name</div><input id="fieldRoomName"/></div>
+          <div class="row"><div>Building</div><input id="fieldBuilding"/></div>
+          <div class="row"><div>Level</div><input id="fieldLevel"/></div>
+          <div class="row"><div>Notes</div><input id="fieldNotes"/></div>
+          <div class="row"><div>Position</div><div id="posLabel" class="muted">—</div></div>
+          <div class="row"><div>GPS</div><div id="gpsLabel" class="muted">—</div></div>
+          <div class="grid">
+            <button id="btnAddPhoto">Add Photo</button>
+            <button id="btnOpenPhoto">Open Photo</button>
+            <button id="btnDuplicate">Duplicate</button>
+            <button id="btnDelete">Delete</button>
+          </div>
+          <input type="file" class="hidden" id="inputPhoto" accept="image/*" capture="environment" multiple />
+          <div class="chips" id="warns"></div>
+        </div>
+
+        <h3>Pins</h3>
+        <div class="section">
+          <div class="grid" style="margin-bottom:.5rem">
+            <button id="btnBulkType">Bulk: Set Type</button>
+            <button id="btnBulkBL">Bulk: Set Bldg/Level</button>
+          </div>
+          <div class="list" id="pinList"></div>
+        </div>
+
+        <h3>Tips</h3>
+        <div class="section help" id="tips">
+          <div>• Callbox / Evac / Hall Direct: room name should be “ELEV. LOBBY” (soft warning only).</div>
+          <div>• “ELECTRICAL” or “DATA” rooms: recommended type is BOH.</div>
+          <div>• Exits allowed on any level.</div>
+          <div>• Restrooms: treat all the same; no special fields forced.</div>
+        </div>
+      </div>
     </div>
   </div>
-</div>
 
-<script>
-/* ---------- Config ---------- */
-const SIGN_TYPES={"FOH":"#0ea5e9","BOH":"#64748b","Elevator":"#8b5cf6","UNIT ID":"#22c55e","Stair - Ingress":"#22c55e","Stair - Egress":"#ef4444","Ingress":"#22c55e","Egress":"#ef4444","Hall Direct":"#f59e0b","Callbox":"#06b6d4","Evac":"#84cc16","Exit":"#ef4444","Restroom":"#10b981"};
-const SHORTS={"Elevator":"ELV","Hall Direct":"HD","Callbox":"CB","Evac":"EV","Ingress":"ING","Egress":"EGR","Exit":"EXIT","Restroom":"WC","UNIT ID":"UNIT","FOH":"FOH","BOH":"BOH","Stair - Ingress":"ING","Stair - Egress":"EGR"};
-const $=s=>document.querySelector(s); const el=(t,a={},k=[])=>{const n=document.createElement(t);for(const p in a){if(p==='style')Object.assign(n.style,a[p]);else n.setAttribute(p,a[p])}k.forEach(c=>n.append(c));return n};
-const storeKey='survey:projects-allinone', lastKey='survey:last-allinone';
-const MAX_SIDE = 2560; // downscale huge images so they display & save reliably on phones
+  <!-- Photo Modal -->
+  <div class="modal" id="photoModal">
+    <div class="box">
+      <header>
+        <strong>Photo Viewer & Measure</strong>
+        <div style="display:flex; gap:.5rem">
+          <button id="btnPhotoMeasure">Measure: OFF</button>
+          <button id="btnPhotoCalib">Calibrate</button>
+          <button id="btnPhotoClose">Close</button>
+        </div>
+      </header>
+      <main>
+        <div class="viewer">
+          <img id="photoImg"/>
+          <svg id="photoMeasureSvg" class="measure" width="100%" height="100%" style="position:absolute; inset:0"></svg>
+        </div>
+        <div class="side">
+          <div class="row"><div>Pin</div><div id="photoPinId" class="muted">—</div></div>
+          <div class="row"><div>Photo</div><div id="photoName" class="muted">—</div></div>
+          <div class="row"><div>Measures</div><div id="photoMeaCount" class="muted">0</div></div>
+          <div class="grid" style="margin-top:.5rem">
+            <button id="btnPhotoPrev">Prev</button>
+            <button id="btnPhotoNext">Next</button>
+            <button id="btnPhotoDelete">Delete</button>
+            <button id="btnPhotoDownload">Download</button>
+          </div>
+          <div class="footer-note">Click two points to measure after calibration.</div>
+        </div>
+      </main>
+    </div>
+  </div>
 
-/* ---------- State ---------- */
-let projects=JSON.parse(localStorage.getItem(storeKey)||'[]');
-let current=null, pageIndex=0, selectedPinId=null, filterType='', searchText='';
+  <script>
+    /***********************
+     * Sign types & colors *
+     ***********************/
+    const SIGN_TYPES = {
+      'FOH':'#0ea5e9','BOH':'#64748b','Elevator':'#8b5cf6','UNIT ID':'#22c55e','Stair - Ingress':'#22c55e','Stair - Egress':'#ef4444','Ingress':'#22c55e','Egress':'#ef4444','Hall Direct':'#f59e0b','Callbox':'#06b6d4','Evac':'#84cc16','Exit':'#ef4444','Restroom':'#10b981'
+    };
+    const SHORT = { 'Elevator':'ELV','Hall Direct':'HD','Callbox':'CB','Evac':'EV','Ingress':'ING','Egress':'EGR','Exit':'EXIT','Restroom':'WC','UNIT ID':'UNIT','FOH':'FOH','BOH':'BOH','Stair - Ingress':'ING','Stair - Egress':'EGR' };
 
-/* ---------- Storage ---------- */
-function save(){ localStorage.setItem(storeKey, JSON.stringify(projects)); }
-function setLast(id){ localStorage.setItem(lastKey, id); }
-function getLast(){ return localStorage.getItem(lastKey); }
+    /****************
+     * App State    *
+     ****************/
+    let projects = loadProjects();
+    let currentProjectId = localStorage.getItem('survey:lastOpenProjectId') || null;
+    let project = currentProjectId ? projects.find(p=>p.id===currentProjectId) : null;
+    if(!project) { project = newProject('Untitled Project'); saveProject(project); }
+    selectProject(project.id);
 
-/* ---------- Models ---------- */
-function emptyProject(){ return { id:'p_'+rnd(), name:'Untitled Project', createdAt:Date.now(), updatedAt:Date.now(), pages:[], lastBuilding:'', lastLevel:'' }; }
-function newProject(){ const p=emptyProject(); projects.push(p); save(); openProject(p.id); }
-function saveAs(){ if(!current) return; const c=structuredClone(current); c.id='p_'+rnd(); c.name=current.name+' (Copy)'; projects.push(c); save(); openProject(c.id); }
-function renameProject(){ if(!current) return; const name=prompt('Project name:', current.name||''); if(name && name.trim()){ current.name=name.trim(); current.updatedAt=Date.now(); save(); renderProjectPicker(); } }
-function openProject(id){ current=projects.find(p=>p.id===id)||projects[projects.length-1]||null; pageIndex=0; selectedPinId=null; setLast(current?.id||''); renderAll(); }
-function renamePage(i){ const pg=current.pages[i]; const name=prompt('Page name:', pg.name||''); if(name && name.trim()){ pg.name=name.trim(); current.updatedAt=Date.now(); save(); renderThumbs(); } }
+    // Undo/redo stacks (store snapshots)
+    const UNDO = []; const REDO = []; const MAX_UNDO = 50;
 
-/* ---------- UI ---------- */
-function renderProjectPicker(){
-  const sel=$('#openProject');
-  sel.innerHTML='<option value="" disabled selected>Open Project…</option>'+projects.map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
-  if(current) sel.value=current.id;
-  sel.onchange=()=>openProject(sel.value);
-}
-function renderTop(){
-  const s=$('#filterType'); s.innerHTML='<option value="">All Types</option>'+Object.keys(SIGN_TYPES).map(k=>'<option>'+k+'</option>').join(''); s.value=filterType;
-}
-function renderThumbs(){
-  const box=$('#thumbs'); box.innerHTML='';
-  (current.pages||[]).forEach((pg,i)=>{
-    const th=el('div',{class:'thumb'+(i===pageIndex?' active':'' )},[
-      el('button',{class:'thumb-btn',title:'Rename page'},[document.createTextNode('✏️')]),
-      el('div',{class:'name'},[document.createTextNode(pg.name)])
-    ]);
-    th.onclick=(e)=>{ if(e.target.tagName==='BUTTON'){ renamePage(i); e.stopPropagation(); return; } pageIndex=i; selectedPinId=null; renderAll(); };
-    box.append(th);
-  });
-}
-function renderCanvas(){
-  const wrap=$('#canvas'); wrap.innerHTML='';
-  const page=current.pages[pageIndex];
-  if(!page){ wrap.innerHTML='<div style="padding:16px;color:#94a3b8">New → upload PDF or images (site maps, floor plans). Tap to add pins.</div>'; return; }
-  const img=el('img',{src:page.dataUrl,alt:''}); wrap.append(img);
-  wrap.append(el('div',{class:'tap-hint'},[document.createTextNode('Tap anywhere to add a pin. Drag to move.')]));
+    // UI refs
+    const thumbsEl = document.getElementById('thumbs');
+    const stageImage = document.getElementById('stageImage');
+    const stage = document.getElementById('stage');
+    const pinLayer = document.getElementById('pinLayer');
+    const measureSvg = document.getElementById('measureSvg');
+    const projectLabel = document.getElementById('projectLabel');
 
-  page.pins.forEach(p=>{
-    if(filterType&&p.sign_type!==filterType) return;
-    if(searchText){
-      const hay=(p.sign_type+' '+p.room_number+' '+p.room_name+' '+p.building+' '+p.level+' '+(p.notes||'')).toLowerCase();
-      if(!hay.includes(searchText)) return;
-    }
-    const d=el('div',{class:'pin'+(p.id===selectedPinId?' sel':''),style:{left:p.x_pct+'%',top:p.y_pct+'%',background:SIGN_TYPES[p.sign_type]||'#334155'}},[
-      document.createTextNode((SHORTS[p.sign_type]||p.sign_type.slice(0,4).toUpperCase()))
-    ]);
-    d.onpointerdown=e=>{e.preventDefault();selectedPinId=p.id;renderRight();d.setPointerCapture(e.pointerId);};
-    d.onpointermove=e=>{ if(e.buttons!==1) return; movePinWithEvent(p,wrap,e); d.style.left=p.x_pct+'%'; d.style.top=p.y_pct+'%'; renderRightPos(); };
-    d.onclick=e=>{ e.stopPropagation(); selectedPinId=p.id; renderRight(); };
-    wrap.append(d);
-  });
+    const fieldType = document.getElementById('fieldType');
+    const fieldRoomNum = document.getElementById('fieldRoomNum');
+    const fieldRoomName = document.getElementById('fieldRoomName');
+    const fieldBuilding = document.getElementById('fieldBuilding');
+    const fieldLevel = document.getElementById('fieldLevel');
+    const fieldNotes = document.getElementById('fieldNotes');
+    const selId = document.getElementById('selId');
+    const posLabel = document.getElementById('posLabel');
+    const gpsLabel = document.getElementById('gpsLabel');
+    const warnsEl = document.getElementById('warns');
 
-  const addAt=(clientX,clientY)=>{const r=wrap.getBoundingClientRect();const x=((clientX-r.left)/r.width)*100,y=((clientY-r.top)/r.height)*100; addPinAt(x,y);};
-  wrap.onclick=e=>{ if(e.target===img||e.target===wrap) addAt(e.clientX,e.clientY); };
-  let pressTimer=null; wrap.onpointerdown=e=>{ if(e.target!==img) return; pressTimer=setTimeout(()=>addAt(e.clientX,e.clientY),500); };
-  wrap.onpointerup=()=>{ if(pressTimer){clearTimeout(pressTimer);pressTimer=null;} };
-}
-function movePinWithEvent(p,wrap,e){
-  const r=wrap.getBoundingClientRect();
-  const x=((e.clientX-r.left)/r.width)*100, y=((e.clientY-r.top)/r.height)*100;
-  p.x_pct=Math.max(0,Math.min(100,x)); p.y_pct=Math.max(0,Math.min(100,y));
-  p.lastEdited=Date.now(); current.updatedAt=Date.now(); save();
-}
+    const pinList = document.getElementById('pinList');
 
-/* ---------- Upload handling ---------- */
-$('#uploadBtn').onclick=()=>$('#upload').click();
-$('#upload').onchange=e=>{
-  const files=Array.from(e.target.files||[]);
-  if(!current) newProject();
-  (async ()=>{
-    for(const f of files){
-      try{
-        if(f.type==='application/pdf' || /\.pdf$/i.test(f.name)){ await addPagesFromPdfFile(f); }
-        else if(f.type.startsWith('image/')){ await addPageFromImageFile(f); }
-        else { alert('Unsupported file: '+f.name); }
-      }catch(err){ alert('Failed to add '+f.name+': '+(err?.message||err)); }
-    }
-  })();
-};
+    const inputBuilding = document.getElementById('inputBuilding');
+    const inputLevel = document.getElementById('inputLevel');
 
-async function addPagesFromPdfFile(file){
-  const ab = await readAsArrayBuffer(file);
-  const pdf = await pdfjsLib.getDocument({data:new Uint8Array(ab)}).promise;
-  for(let i=1;i<=pdf.numPages;i++){
-    const page = await pdf.getPage(i);
-    const viewport = page.getViewport({scale:1});
-    const targetW = Math.min(MAX_SIDE, 1600);
-    const scale = targetW/viewport.width;
-    const v2 = page.getViewport({scale});
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.floor(v2.width);
-    canvas.height = Math.floor(v2.height);
-    await page.render({canvasContext:canvas.getContext('2d'), viewport:v2}).promise;
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
-    const pg={ id:'pg_'+rnd(), name:`${file.name} · p${i}`, kind:'image', dataUrl, pins:[] };
-    current.pages.push(pg);
-  }
-  current.updatedAt=Date.now(); save(); pageIndex=current.pages.length-1; renderAll();
-}
+    const inputUpload = document.getElementById('inputUpload');
 
-async function addPageFromImageFile(file){
-  // Try object URL first (more reliable for HEIC), then downscale + save as JPEG for persistence
-  const objUrl = URL.createObjectURL(file);
-  let img;
-  try {
-    img = await loadImageAny(objUrl);
-  } catch {
-    try {
-      const dataURL = await readAsDataURL(file);
-      img = await loadImageAny(dataURL);
-    } catch (e2) {
-      URL.revokeObjectURL(objUrl);
-      alert("This image couldn't be decoded by the browser. If it's HEIC, try 'Most Compatible' (JPEG) or export as PNG/JPG.");
-      return;
-    }
-  }
+    const filterType = document.getElementById('filterType');
+    const inputSearch = document.getElementById('inputSearch');
+    const toggleStrict = document.getElementById('toggleStrict');
+    const toggleField = document.getElementById('toggleField');
 
-  let w=img.naturalWidth, h=img.naturalHeight, outURL;
-  if (Math.max(w,h) > MAX_SIDE) {
-    const scale = MAX_SIDE/Math.max(w,h);
-    const cw = Math.round(w*scale), ch = Math.round(h*scale);
-    outURL = drawToDataURL(img, cw, ch, 'image/jpeg', 0.85);
-  } else {
-    outURL = drawToDataURL(img, w, h, 'image/jpeg', 0.92);
-  }
-  URL.revokeObjectURL(objUrl);
+    // Modal refs
+    const photoModal = document.getElementById('photoModal');
+    const photoImg = document.getElementById('photoImg');
+    const photoMeasureSvg = document.getElementById('photoMeasureSvg');
+    const photoPinId = document.getElementById('photoPinId');
+    const photoName = document.getElementById('photoName');
+    const photoMeaCount = document.getElementById('photoMeaCount');
 
-  try{
-    const pg={ id:'pg_'+rnd(), name:file.name, kind:'image', dataUrl:outURL, pins:[] };
-    current.pages.push(pg); current.updatedAt=Date.now(); save(); pageIndex=current.pages.length-1; renderAll();
-  }catch(e){
-    alert("That image was too large to save on this device. Try a smaller export or screenshot.");
-  }
-}
-
-/* ---------- Pin details ---------- */
-function renderRight(){
-  const page=current.pages[pageIndex];
-  const pin=page?.pins.find(p=>p.id===selectedPinId);
-  const noSel=$('#noSel'), form=$('#pinForm');
-  if(!pin){ noSel.classList.remove('hidden'); form.classList.add('hidden'); return; }
-  noSel.classList.add('hidden'); form.classList.remove('hidden');
-
-  const typeSel=$('#f_type'); typeSel.innerHTML=Object.keys(SIGN_TYPES).map(k=>`<option>${k}</option>`).join(''); typeSel.value=pin.sign_type;
-  $('#f_roomnum').value=pin.room_number||'';
-  $('#f_roomname').value=pin.room_name||'';
-  $('#f_building').value=pin.building||'';
-  $('#f_level').value=pin.level||'';
-  $('#f_notes').value=pin.notes||'';
-  renderRightPos();
-
-  const row=$('#photoRow'); row.innerHTML='';
-  (pin.photos||[]).forEach(ph=> row.append(el('img',{src:ph.dataUrl,style:{width:'64px',height:'64px',objectFit:'cover',borderRadius:'8px',border:'1px solid #1f2a3f'}})));
-
-  typeSel.onchange=()=>{ pin.sign_type=typeSel.value; pin.lastEdited=Date.now(); save(); renderCanvas(); };
-  $('#f_roomnum').oninput=e=>{ pin.room_number=e.target.value; pin.lastEdited=Date.now(); save(); };
-  $('#f_roomname').oninput=e=>{ pin.room_name=e.target.value; pin.lastEdited=Date.now(); save(); };
-  $('#f_building').oninput=e=>{ pin.building=e.target.value; pin.lastEdited=Date.now(); save(); };
-  $('#f_level').oninput=e=>{ pin.level=e.target.value; pin.lastEdited=Date.now(); save(); };
-  $('#f_notes').oninput=e=>{ pin.notes=e.target.value; pin.lastEdited=Date.now(); save(); };
-  $('#f_photo').onchange=e=>{
-    const f=e.target.files?.[0]; if(!f) return;
-    readAsDataURL(f).then(u=>{
-      pin.photos = pin.photos||[];
-      pin.photos.push({name:f.name, dataUrl:u});
-      pin.lastEdited=Date.now(); save(); renderRight();
+    // Populate type selectors
+    Object.keys(SIGN_TYPES).forEach(t=>{
+      const o=document.createElement('option'); o.value=t; o.textContent=t; filterType.appendChild(o.cloneNode(true)); fieldType.appendChild(o);
     });
-  };
-  $('#duplicate').onclick=()=>{ const copy=structuredClone(pin); copy.id='pin_'+rnd(); copy.x_pct=Math.min(100,pin.x_pct+2); copy.y_pct=Math.min(100,pin.y_pct+2); copy.lastEdited=Date.now(); page.pins.push(copy); selectedPinId=copy.id; save(); renderAll(); };
-  $('#delete').onclick=()=>{ page.pins = page.pins.filter(p=>p.id!==pin.id); selectedPinId=null; save(); renderAll(); };
-}
-function renderRightPos(){
-  const page=current.pages[pageIndex]; const pin=page?.pins.find(p=>p.id===selectedPinId); if(!pin) return;
-  $('#posReadout').textContent = `Position: ${pin.x_pct.toFixed(2)}%, ${pin.y_pct.toFixed(2)}%`+(pin.gps?`  |  GPS: ${pin.gps.lat.toFixed(5)}, ${pin.gps.lon.toFixed(5)}`:'');
-}
-function addPinAt(x,y){
-  const page=current.pages[pageIndex]; if(!page) return;
-  const id='pin_'+rnd();
-  const pin={ id, sign_type:'FOH', room_number:'', room_name:'', building:current.lastBuilding||'', level:current.lastLevel||'', x_pct:x, y_pct:y, notes:'', photos:[], lastEdited:Date.now() };
-  page.pins.push(pin); selectedPinId=id; current.updatedAt=Date.now(); save(); renderAll();
-  if(navigator.geolocation && location.protocol==='https:'){
-    navigator.geolocation.getCurrentPosition(pos=>{ pin.gps={lat:pos.coords.latitude, lon:pos.coords.longitude}; pin.lastEdited=Date.now(); save(); if(selectedPinId===id) renderRight(); },()=>{});
-  }
-}
 
-/* ---------- Search/Filter/Export ---------- */
-function sortSigns(a,b){
-  const ba=(a.building||'').localeCompare(b.building||''); if(ba!==0) return ba;
-  const la=(a.level||'').localeCompare(b.level||''); if(la!==0) return la;
-  return (a.room_number||'').localeCompare(b.room_number||'', undefined, {numeric:true, sensitivity:'base'});
-}
-function exportCsv(){
-  const rows=[];
-  current.pages.forEach(pg=>{
-    (pg.pins||[]).forEach(p=>{
-      rows.push({ id:p.id, sign_type:p.sign_type, room_number:p.room_number, room_name:p.room_name, building:p.building, level:p.level, x_pct:p.x_pct, y_pct:p.y_pct, notes:p.notes||'', lat:p.gps?.lat||'', lon:p.gps?.lon||'', page_name:pg.name, last_edited:new Date(p.lastEdited).toISOString() });
+    // Toolbar Events
+    document.getElementById('btnNew').onclick = ()=>{ const name=prompt('New project name?','New Project'); if(!name) return; commit(); const p=newProject(name); saveProject(p); selectProject(p.id); };
+    document.getElementById('btnOpen').onclick = ()=>{
+      const items = projects.map(p=>`• ${p.name} (${new Date(p.updatedAt).toLocaleString()}) [${p.id}]`).join('\n');
+      const id = prompt('Projects:\n'+items+'\n\nEnter project id to open:');
+      const found = projects.find(p=>p.id===id);
+      if(found){ selectProject(found.id); } else alert('Not found');
+    };
+    document.getElementById('btnSaveAs').onclick = ()=>{ const name=prompt('Duplicate as name:', project.name+' (copy)'); if(!name) return; commit(); const copy=JSON.parse(JSON.stringify(project)); copy.id=id(); copy.name=name; copy.createdAt=Date.now(); copy.updatedAt=Date.now(); saveProject(copy); selectProject(copy.id); };
+
+    document.getElementById('btnUpload').onclick = ()=> inputUpload.click();
+    inputUpload.onchange = async (e)=>{
+      const files = [...e.target.files];
+      if(!files.length) return;
+      commit();
+      for(const f of files){
+        if(f.type==='application/pdf'){ await addPdfPages(f); }
+        else if(f.type.startsWith('image/')){ const url=URL.createObjectURL(f); const name=f.name.replace(/\.[^.]+$/,''); addImagePage(url,name); }
+      }
+      renderAll();
+    };
+
+    document.getElementById('btnExportCSV').onclick = ()=> exportCSV();
+    document.getElementById('btnExportXLSX').onclick = ()=> exportXLSX();
+    document.getElementById('btnExportZIP').onclick = ()=> exportZIP();
+
+    document.getElementById('btnImportCSV').onclick = ()=> document.getElementById('inputImportCSV').click();
+    document.getElementById('inputImportCSV').onchange = async (e)=>{
+      const f=e.target.files[0]; if(!f) return; const text=await f.text(); importCSV(text);
+    };
+
+    document.getElementById('btnOCR').onclick = ()=> ocrCurrentView();
+
+    const btnCalibrate = document.getElementById('btnCalibrate');
+    const btnMeasureToggle = document.getElementById('btnMeasureToggle');
+    const btnMeasureReset = document.getElementById('btnMeasureReset');
+
+    btnCalibrate.onclick = ()=> startCalibration('main');
+    btnMeasureToggle.onclick = ()=> toggleMeasuring('main');
+    btnMeasureReset.onclick = ()=> resetMeasurements('main');
+
+    document.getElementById('btnUndo').onclick = ()=> undo();
+    document.getElementById('btnRedo').onclick = ()=> redo();
+
+    document.getElementById('btnClearPins').onclick = ()=>{ if(!confirm('Clear ALL pins on this page?')) return; commit(); currentPage().pins=[]; renderAll(); };
+    document.getElementById('btnAddPin').onclick = ()=> startAddPin();
+
+    toggleStrict.onchange = ()=>{ project.settings.strictRules = !!toggleStrict.checked; saveProject(project); renderWarnings(); };
+    toggleField.onchange = ()=>{ project.settings.fieldMode = !!toggleField.checked; saveProject(project); renderPins(); };
+
+    inputBuilding.oninput = ()=>{ projectContext.building = inputBuilding.value; };
+    inputLevel.oninput = ()=>{ projectContext.level = inputLevel.value; };
+
+    inputSearch.oninput = ()=> renderPinsList();
+    filterType.onchange = ()=> renderPins();
+
+    // Right panel fields events
+    [fieldType, fieldRoomNum, fieldRoomName, fieldBuilding, fieldLevel, fieldNotes].forEach(el=>{
+      el.oninput = ()=>{
+        const pin = selectedPin(); if(!pin) return; commit();
+        if(el===fieldType) pin.sign_type = el.value || '';
+        if(el===fieldRoomNum) pin.room_number = el.value || '';
+        if(el===fieldRoomName) pin.room_name = el.value || '';
+        if(el===fieldBuilding) pin.building = el.value || '';
+        if(el===fieldLevel) pin.level = el.value || '';
+        if(el===fieldNotes) pin.notes = el.value || '';
+        pin.lastEdited=Date.now(); saveProject(project); renderPins(); renderWarnings(); renderPinsList();
+      }
     });
-  });
-  rows.sort(sortSigns);
-  const headers=Object.keys(rows[0]||{id:'',sign_type:'',room_number:'',room_name:'',building:'',level:'',x_pct:'',y_pct:'',notes:'',lat:'',lon:'',page_name:'',last_edited:''});
-  const csv=[headers.join(",")].concat(rows.map(r=> headers.map(h=> String(r[h]||'').replace(/"/g,'""')).map(x=>`"${x}"`).join(","))).join("\n");
-  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
-  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=(current.name.replace(/[^a-z0-9\-]+/gi,'-')||'project')+'_export.csv'; a.click(); URL.revokeObjectURL(a.href);
-}
 
-/* ---------- Helpers ---------- */
-function rnd(){ return Math.random().toString(36).slice(2); }
-function readAsDataURL(file){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(file); }); }
-function readAsArrayBuffer(file){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsArrayBuffer(file); }); }
-function loadImageAny(src){ return new Promise((res,rej)=>{ const im=new Image(); im.onload=()=>res(im); im.onerror=()=>rej(new Error('decode-failed')); im.src=src; }); }
-function drawToDataURL(img, w, h, type='image/jpeg', quality=0.9){
-  const c=document.createElement('canvas'); c.width=w; c.height=h; const ctx=c.getContext('2d'); ctx.drawImage(img,0,0,w,h); return c.toDataURL(type, quality);
-}
+    document.getElementById('btnAddPhoto').onclick = ()=> document.getElementById('inputPhoto').click();
+    document.getElementById('inputPhoto').onchange = async (e)=>{
+      const pin = selectedPin(); if(!pin) return alert('Select a pin first.');
+      const files=[...e.target.files]; if(!files.length) return;
+      commit();
+      for(const f of files){ const url=await fileToDataURL(f); pin.photos.push({name:f.name,dataUrl:url,measurements:[]}); }
+      pin.lastEdited=Date.now(); saveProject(project); renderPinsList(); alert('Photo(s) added.');
+    };
 
-/* ---------- Boot ---------- */
-function renderAll(){
-  if(!current){
-    $('#thumbs').innerHTML='';
-    $('#canvas').innerHTML='<div style="padding:16px;color:#94a3b8">New → upload PDF or images (site maps, floor plans). Tap to add pins.</div>';
-    renderProjectPicker(); renderTop();
-    return;
-  }
-  renderProjectPicker(); renderTop(); renderThumbs(); renderCanvas(); renderRight();
-}
-function init(){
-  $('#newProject').onclick=newProject; $('#saveAs').onclick=saveAs; $('#renameProject').onclick=renameProject;
-  $('#exportCsv').onclick=exportCsv; $('#clearPage').onclick=()=>{ const pg=current.pages[pageIndex]; if(pg && confirm('Clear all pins on this page?')){ pg.pins=[]; save(); renderAll(); } };
-  $('#bldg').oninput=e=>{ if(!current) return; current.lastBuilding=e.target.value; save(); };
-  $('#level').oninput=e=>{ if(!current) return; current.lastLevel=e.target.value; save(); };
-  $('#filterType').onchange=e=>{ filterType=e.target.value; renderCanvas(); };
-  $('#search').oninput=e=>{ searchText=(e.target.value||'').toLowerCase(); renderCanvas(); };
+    document.getElementById('btnOpenPhoto').onclick = ()=> openPhotoModal();
+    document.getElementById('btnDuplicate').onclick = ()=>{ const pin=selectedPin(); if(!pin) return; commit(); const p=JSON.parse(JSON.stringify(pin)); p.id=id(); p.x_pct+=2; p.y_pct+=2; p.lastEdited=Date.now(); currentPage().pins.push(p); saveProject(project); renderPins(); renderPinsList(); selectPin(p.id); };
+    document.getElementById('btnDelete').onclick = ()=>{ const pin=selectedPin(); if(!pin) return; if(!confirm('Delete selected pin?')) return; commit(); currentPage().pins=currentPage().pins.filter(x=>x.id!==pin.id); saveProject(project); renderPins(); renderPinsList(); clearSelection(); };
 
-  $('#uploadBtn').onclick=()=>$('#upload').click();
+    document.getElementById('btnBulkType').onclick = ()=>{
+      const type = prompt('Enter type for selected checkboxes (or empty to cancel):'); if(type==null) return; commit();
+      const ids = checkedPinIds(); ids.forEach(idv=>{ const p=findPin(idv); if(p){ p.sign_type=type; p.lastEdited=Date.now(); }});
+      saveProject(project); renderPins(); renderPinsList();
+    };
+    document.getElementById('btnBulkBL').onclick = ()=>{
+      const b = prompt('Building value (blank to keep):', inputBuilding.value||''); if(b==null) return;
+      const l = prompt('Level value (blank to keep):', inputLevel.value||''); if(l==null) return; commit();
+      const ids = checkedPinIds(); ids.forEach(idv=>{ const p=findPin(idv); if(p){ if(b!=='') p.building=b; if(l!=='') p.level=l; p.lastEdited=Date.now(); }});
+      saveProject(project); renderPins(); renderPinsList();
+    };
 
-  const last=getLast(); if(projects.length && last){ current=projects.find(p=>p.id===last)||projects[0]; } else if(projects.length){ current=projects[0]; }
-  if(current){ $('#bldg').value=current.lastBuilding||''; $('#level').value=current.lastLevel||''; }
-  renderAll();
-}
-init();
-</script>
-</body></html>
+    // Stage interactions
+    let addingPin=false; let dragging=null; let startDrag=null; let fieldMode=false;
+
+    stage.addEventListener('pointerdown', (e)=>{
+      if(e.target.classList.contains('pin')) return; // handled by pin
+      if(!addingPin) return;
+      const {x_pct,y_pct} = toPctCoords(e);
+      commit();
+      const p = makePin(x_pct,y_pct);
+      // GPS attempt
+      if(navigator.geolocation){ navigator.geolocation.getCurrentPosition(pos=>{ p.gps={lat:+pos.coords.latitude.toFixed(6), lon:+pos.coords.longitude.toFixed(6)}; saveProject(project); if(selectedPin()?.id===p.id) updatePinDetails(); }, ()=>{}); }
+      currentPage().pins.push(p); saveProject(project); renderPins(); renderPinsList(); selectPin(p.id); addingPin=false; document.getElementById('btnAddPin').classList.remove('ok');
+    });
+
+    pinLayer.addEventListener('pointerdown',(e)=>{
+      const el = e.target.closest('.pin'); if(!el) return;
+      const idv = el.dataset.id; selectPin(idv);
+      dragging = el; startDrag={dx:e.clientX, dy:e.clientY}; el.setPointerCapture(e.pointerId);
+    });
+    pinLayer.addEventListener('pointermove',(e)=>{
+      if(!dragging) return; e.preventDefault();
+      const pin = findPin(dragging.dataset.id); if(!pin) return;
+      const {x_pct,y_pct} = toPctCoords(e);
+      dragging.style.left = x_pct+'%';
+      dragging.style.top = y_pct+'%';
+      posLabel.textContent = pctLabel(x_pct,y_pct);
+    });
+    pinLayer.addEventListener('pointerup',(e)=>{
+      if(!dragging) return; const pin = findPin(dragging.dataset.id); if(pin){ commit(); const {x_pct,y_pct}=toPctCoords(e); pin.x_pct=x_pct; pin.y_pct=y_pct; pin.lastEdited=Date.now(); saveProject(project); renderPinsList(); }
+      dragging.releasePointerCapture?.(e.pointerId); dragging=null; startDrag=null;
+    });
+
+    function startAddPin(){ addingPin=!addingPin; document.getElementById('btnAddPin').classList.toggle('ok', addingPin); }
+
+    /***********************
+     * Measurement (main)  *
+     ***********************/
+    let measureMode=false; let calibFirst=null; let measureFirst=null;
+    function startCalibration(scope){ calibFirst=null; measureFirst=null; alert('Calibration: click two points on the page to set real feet.'); measureMode=false; btnMeasureToggle.textContent='Measuring: OFF'; calibAwait=scope; }
+    let calibAwait=null; // 'main' | 'photo'
+    function toggleMeasuring(scope){ measureMode=!measureMode; if(scope==='main') btnMeasureToggle.textContent = 'Measuring: '+(measureMode?'ON':'OFF'); }
+    function resetMeasurements(scope){ if(scope==='main'){ currentPage().measurements=[]; drawMeasurements(); } else { if(photoState.photo){ photoState.photo.measurements=[]; drawPhotoMeasurements(); } }
+    }
+
+    stage.addEventListener('click', (e)=>{
+      const page=currentPage(); if(!page) return;
+      const pt=toLocal(e);
+      if(calibAwait==='main'){
+        if(!calibFirst) { calibFirst=pt; return; }
+        const second=pt;
+        const px = dist(calibFirst, second);
+        const ft = parseFloat(prompt('Enter real distance (feet):','10')) || 10;
+        page.scalePxPerFt = px/ft; calibFirst=null; calibAwait=null; alert('Calibrated: '+(px/ft).toFixed(2)+' px/ft'); return;
+      }
+      if(measureMode){
+        if(!measureFirst){ measureFirst=pt; return; }
+        const m={id:id(), kind:'main', points:[measureFirst, pt]};
+        if(page.scalePxPerFt){ m.feet = (dist(measureFirst, pt)/page.scalePxPerFt); }
+        page.measurements = page.measurements||[]; page.measurements.push(m); measureFirst=null; drawMeasurements();
+      }
+    });
+
+    function drawMeasurements(){
+      const page=currentPage();
+      while(measureSvg.firstChild) measureSvg.removeChild(measureSvg.firstChild);
+      if(!page||!page.measurements) return;
+      const rect = stageImage.getBoundingClientRect();
+      page.measurements.forEach(m=>{
+        const a=toScreen(m.points[0]); const b=toScreen(m.points[1]);
+        const dx=Math.abs(a.x-b.x), dy=Math.abs(a.y-b.y);
+        let color = (dx>dy)? '#ef4444' : (dy>dx)? '#3b82f6' : '#f59e0b';
+        const line=document.createElementNS('http://www.w3.org/2000/svg','line');
+        line.setAttribute('x1',a.x); line.setAttribute('y1',a.y); line.setAttribute('x2',b.x); line.setAttribute('y2',b.y); line.setAttribute('stroke',color); measureSvg.appendChild(line);
+        const midx=(a.x+b.x)/2, midy=(a.y+b.y)/2; const text=document.createElementNS('http://www.w3.org/2000/svg','text');
+        const ft = m.feet ? m.feet.toFixed(2)+' ft' : ((currentPage().scalePxPerFt)? (dist(a,b)/currentPage().scalePxPerFt).toFixed(2)+' ft' : (dist(a,b).toFixed(0)+' px'));
+        text.setAttribute('x',midx); text.setAttribute('y',midy-6); text.textContent=ft; measureSvg.appendChild(text);
+      });
+    }
+
+    /***********************
+     * Photo modal measure *
+     ***********************/
+    const photoState = { pin:null, idx:0, measure:false, calib:null };
+    document.getElementById('btnPhotoClose').onclick = ()=> closePhotoModal();
+    document.getElementById('btnPhotoMeasure').onclick = ()=>{ photoState.measure=!photoState.measure; document.getElementById('btnPhotoMeasure').textContent='Measure: '+(photoState.measure?'ON':'OFF'); };
+    document.getElementById('btnPhotoCalib').onclick = ()=>{ photoState.calib=null; alert('Photo calibration: click two points on the image.'); };
+    document.getElementById('btnPhotoPrev').onclick = ()=>{ if(!photoState.pin) return; photoState.idx=Math.max(0,photoState.idx-1); showPhoto(); };
+    document.getElementById('btnPhotoNext').onclick = ()=>{ if(!photoState.pin) return; photoState.idx=Math.min(photoState.pin.photos.length-1,photoState.idx+1); showPhoto(); };
+    document.getElementById('btnPhotoDelete').onclick = ()=>{ if(!photoState.pin) return; if(!confirm('Delete this photo?')) return; commit(); photoState.pin.photos.splice(photoState.idx,1); photoState.idx=Math.max(0,photoState.idx-1); saveProject(project); if(photoState.pin.photos.length===0){ closePhotoModal(); } else { showPhoto(); } };
+    document.getElementById('btnPhotoDownload').onclick = ()=>{ const ph=photoState.pin?.photos[photoState.idx]; if(!ph) return; downloadFile(ph.name, dataURLtoBlob(ph.dataUrl)); };
+
+    photoMeasureSvg.addEventListener('click', (e)=>{
+      const ph = photoState.pin?.photos[photoState.idx]; if(!ph) return;
+      const rect = photoImg.getBoundingClientRect();
+      const pt = { x: e.clientX-rect.left, y:e.clientY-rect.top };
+      if(photoState.calib===null){ photoState.calib = pt; return; }
+      if(photoState.calib && !photoState.measureTmp){ // second calib point
+        const px = dist(photoState.calib, pt); const ft=parseFloat(prompt('Enter feet for calibration:','10'))||10; ph.measurements=ph.measurements||[]; ph.scalePxPerFt = px/ft; photoState.calib=null; drawPhotoMeasurements(); return;
+      }
+    });
+
+    let photoMeasureFirst=null;
+    photoImg.addEventListener('click',(e)=>{
+      if(!photoState.measure) return; const ph=photoState.pin?.photos[photoState.idx]; if(!ph) return;
+      const rect = photoImg.getBoundingClientRect(); const pt={x:e.clientX-rect.left,y:e.clientY-rect.top};
+      if(!photoMeasureFirst){ photoMeasureFirst=pt; return; }
+      const m={id:id(), kind:'photo', points:[photoMeasureFirst, pt]}; if(ph.scalePxPerFt){ m.feet=dist(photoMeasureFirst,pt)/ph.scalePxPerFt; }
+      ph.measurements=ph.measurements||[]; ph.measurements.push(m); photoMeasureFirst=null; drawPhotoMeasurements(); photoMeaCount.textContent=ph.measurements.length;
+    });
+
+    function drawPhotoMeasurements(){
+      while(photoMeasureSvg.firstChild) photoMeasureSvg.removeChild(photoMeasureSvg.firstChild);
+      const ph=photoState.pin?.photos[photoState.idx]; if(!ph||!ph.measurements) return;
+      ph.measurements.forEach(m=>{
+        const a=m.points[0], b=m.points[1];
+        const dx=Math.abs(a.x-b.x), dy=Math.abs(a.y-b.y);
+        const color=(dx>dy)? '#ef4444' : (dy>dx)? '#3b82f6' : '#f59e0b';
+        const line=document.createElementNS('http://www.w3.org/2000/svg','line'); line.setAttribute('x1',a.x); line.setAttribute('y1',a.y); line.setAttribute('x2',b.x); line.setAttribute('y2',b.y); line.setAttribute('stroke',color); photoMeasureSvg.appendChild(line);
+        const midx=(a.x+b.x)/2, midy=(a.y+b.y)/2; const text=document.createElementNS('http://www.w3.org/2000/svg','text');
+        const ft = m.feet ? m.feet.toFixed(2)+' ft' : (ph.scalePxPerFt? (dist(a,b)/ph.scalePxPerFt).toFixed(2)+' ft' : (dist(a,b).toFixed(0)+' px'));
+        text.setAttribute('x',midx); text.setAttribute('y',midy-6); text.textContent=ft; photoMeasureSvg.appendChild(text);
+      });
+    }
+
+    function openPhotoModal(){ const p=selectedPin(); if(!p) return alert('Select a pin first.'); if(!p.photos.length) return alert('No photos attached.'); photoState.pin=p; photoState.idx=0; showPhoto(); photoModal.style.display='flex'; }
+    function showPhoto(){ const ph=photoState.pin.photos[photoState.idx]; photoImg.src=ph.dataUrl; photoPinId.textContent=photoState.pin.id; photoName.textContent=ph.name; photoMeaCount.textContent=(ph.measurements?.length||0); drawPhotoMeasurements(); }
+    function closePhotoModal(){ photoModal.style.display='none'; }
+
+    /****************
+     * OCR (view)   *
+     ****************/
+    async function ocrCurrentView(){
+      const canvas = document.createElement('canvas');
+      // draw current stage image to canvas
+      const img=stageImage; if(!img.src){ alert('No page image.'); return; }
+      const w=img.naturalWidth, h=img.naturalHeight; canvas.width=w; canvas.height=h; const ctx=canvas.getContext('2d'); ctx.drawImage(img,0,0);
+      const { data: { text } } = await Tesseract.recognize(canvas, 'eng');
+      let out = text.trim(); if(!out){ alert('No text recognized.'); return; }
+      const head = out.slice(0,200);
+      try { await navigator.clipboard.writeText(out); } catch{}
+      inputSearch.value=head; renderPinsList(); alert('OCR done. First 200 chars placed in search. Full text copied to clipboard.');
+    }
+
+    /****************
+     * Rendering     *
+     ****************/
+    function renderAll(){ renderThumbs(); renderStage(); renderPins(); renderPinsList(); renderProjectLabel(); drawMeasurements(); toggleStrict.checked=!!project.settings.strictRules; toggleField.checked=!!project.settings.fieldMode; }
+    function renderProjectLabel(){ projectLabel.textContent = `Project: ${project.name} • Pages: ${project.pages.length} • Pins: ${project.pages.reduce((a,p)=>a+(p.pins?.length||0),0)}`; }
+
+    function renderThumbs(){
+      thumbsEl.innerHTML='';
+      project.pages.forEach((pg,idx)=>{
+        const d=document.createElement('div'); d.className='thumb'+(project._pageId===pg.id?' active':'');
+        const im=document.createElement('img'); im.src=pg.blobUrl; d.appendChild(im);
+        const inp=document.createElement('input'); inp.value=pg.name; inp.oninput=()=>{ pg.name=inp.value; pg.updatedAt=Date.now(); saveProject(project); renderProjectLabel(); }; d.appendChild(inp);
+        d.onclick=()=>{ project._pageId=pg.id; saveProject(project); renderStage(); renderPins(); drawMeasurements(); };
+        thumbsEl.appendChild(d);
+      });
+    }
+
+    function renderStage(){ const pg=currentPage(); if(!pg){ stageImage.removeAttribute('src'); return; } stageImage.src=pg.blobUrl; }
+
+    function renderPins(){ pinLayer.innerHTML=''; const pg=currentPage(); if(!pg) return;
+      fieldMode=!!project.settings.fieldMode;
+      const q = inputSearch.value.toLowerCase(); const typeFilter=filterType.value;
+      (pg.pins||[]).forEach(p=>{
+        if(typeFilter && p.sign_type!==typeFilter) return;
+        const line = [p.sign_type,p.room_number,p.room_name,p.building,p.level,p.notes].join(' ').toLowerCase(); if(q && !line.includes(q)) return;
+        const el=document.createElement('div'); el.className='pin'+(p.id===project._sel?' selected':''); el.dataset.id=p.id; el.textContent=SHORT[p.sign_type]||p.sign_type.slice(0,3).toUpperCase(); el.style.left=p.x_pct+'%'; el.style.top=p.y_pct+'%'; el.style.background=SIGN_TYPES[p.sign_type]||'#a3e635'; el.style.padding = fieldMode? '.28rem .5rem' : '.18rem .35rem'; el.style.fontSize= fieldMode? '0.9rem' : '0.75rem'; pinLayer.appendChild(el);
+        el.addEventListener('dblclick',()=>{ selectPin(p.id); openPhotoModal(); });
+      });
+      updatePinDetails();
+    }
+
+    function renderPinsList(){ pinList.innerHTML=''; const pg=currentPage(); if(!pg) return; const q=inputSearch.value.toLowerCase(); const typeFilter=filterType.value;
+      (pg.pins||[]).forEach(p=>{
+        const line=[p.sign_type,p.room_number,p.room_name,p.building,p.level,p.notes].join(' ').toLowerCase(); if(q && !line.includes(q)) return; if(typeFilter && p.sign_type!==typeFilter) return;
+        const row=document.createElement('div'); row.className='item';
+        const cb=document.createElement('input'); cb.type='checkbox'; cb.dataset.id=p.id; row.appendChild(cb);
+        const txt=document.createElement('div'); txt.innerHTML=`<strong>${p.sign_type}</strong> • ${p.room_number||'-'} ${p.room_name||''} <span class="muted">[${p.building||'-'}/${p.level||'-'}]</span>`; row.appendChild(txt);
+        const go=document.createElement('button'); go.textContent='Go'; go.onclick=()=>{ selectPin(p.id); }; row.appendChild(go);
+        pinList.appendChild(row);
+      });
+    }
+
+    function updatePinDetails(){ const p=selectedPin();
+      selId.textContent=p? p.id : 'None';
+      fieldType.value=p?.sign_type||''; fieldRoomNum.value=p?.room_number||''; fieldRoomName.value=p?.room_name||''; fieldBuilding.value=p?.building||''; fieldLevel.value=p?.level||''; fieldNotes.value=p?.notes||'';
+      posLabel.textContent=p? pctLabel(p.x_pct,p.y_pct) : '—'; gpsLabel.textContent=(p&&p.gps)? `${p.gps.lat}, ${p.gps.lon}` : '—';
+      renderWarnings();
+    }
+
+    function renderWarnings(){ warnsEl.innerHTML=''; const p=selectedPin(); if(!p) return; const list=[];
+      if(['Callbox','Evac','Hall Direct'].includes(p.sign_type) && (p.room_name||'').toUpperCase()!=='ELEV. LOBBY'){ list.push('Tip: Room name usually “ELEV. LOBBY”.'); }
+      const rn=(p.room_name||'').toUpperCase(); if((/ELECTRICAL|DATA/).test(rn) && p.sign_type!=='BOH'){ list.push('Recommended BOH for ELECTRICAL/DATA rooms.'); }
+      list.forEach(s=>{ const t=document.createElement('span'); t.className='tag warn'; t.textContent=s; warnsEl.appendChild(t); });
+    }
+
+    function selectPin(idv){ project._sel=idv; saveProject(project); renderPins(); const el=[...pinLayer.children].find(x=>x.dataset.id===idv); if(el){ el.scrollIntoView({block:'center', inline:'center', behavior:'smooth'}); }
+      const p=findPin(idv); if(p){ // jump to its page if exists
+        const pgId=project.pages.find(pg=>pg.pins.includes(p))?.id; if(pgId && project._pageId!==pgId){ project._pageId=pgId; saveProject(project); renderStage(); renderPins(); drawMeasurements(); }
+      }
+    }
+
+    function clearSelection(){ project._sel=null; saveProject(project); updatePinDetails(); }
+
+    /****************
+     * CSV / XLSX    *
+     ****************/
+    function exportCSV(){ const rows = toRows(); const csv=[Object.keys(rows[0]||{}).join(','), ...rows.map(r=>Object.values(r).map(v=>csvEscape(v)).join(','))].join('\n'); downloadText(project.name.replace(/\W+/g,'_')+"_signage.csv", csv); }
+
+    function exportXLSX(){ const rows = toRows(); const wb = XLSX.utils.book_new(); const info=[
+      ['Project', project.name], ['Exported', new Date().toLocaleString()], ['Total Signs', rows.length], ['Total Pages', project.pages.length]
+    ];
+    // quick breakdown
+    const counts = {}; rows.forEach(r=> counts[r.sign_type]=(counts[r.sign_type]||0)+1 ); info.push([]); info.push(['Breakdown']); Object.entries(counts).forEach(([k,v])=> info.push([k,v]));
+    const wsInfo = XLSX.utils.aoa_to_sheet(info);
+    const ws = XLSX.utils.json_to_sheet(rows, {header: Object.keys(rows[0]||{})});
+    XLSX.utils.book_append_sheet(wb, wsInfo, 'Project Info');
+    XLSX.utils.book_append_sheet(wb, ws, 'Signage');
+    const out = XLSX.write(wb, {bookType:'xlsx', type:'array'});
+    downloadFile(project.name.replace(/\W+/g,'_')+'_signage.xlsx', new Blob([out], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+    }
+
+    async function exportZIP(){ const rows=toRows(); const zip=new JSZip(); zip.file('signage.csv', [Object.keys(rows[0]||{}).join(','), ...rows.map(r=>Object.values(r).map(v=>csvEscape(v)).join(','))].join('\n'));
+      // photos
+      project.pages.forEach(pg=> pg.pins.forEach(pin=> pin.photos?.forEach((ph, idx)=>{ const folder=zip.folder(`photos/${pin.id}`); folder.file(ph.name||`photo_${idx+1}.png`, dataURLtoArrayBuffer(ph.dataUrl)); })) );
+      const blob = await zip.generateAsync({type:'blob'}); downloadFile(project.name.replace(/\W+/g,'_')+'_export.zip', blob);
+    }
+
+    function importCSV(text){ const lines = text.split(/\r?\n/).filter(Boolean); const hdr=lines[0].split(',').map(h=>h.trim()); commit();
+      for(let i=1;i<lines.length;i++){
+        const cells = parseCsvLine(lines[i]); const row={}; hdr.forEach((h,idx)=> row[h]=cells[idx]||'');
+        const p = makePin(parseFloat(row.x_pct)||50, parseFloat(row.y_pct)||50); p.sign_type=row.sign_type||''; p.room_number=row.room_number||''; p.room_name=row.room_name||''; p.building=row.building||''; p.level=row.level||''; p.notes=row.notes||''; if(row.lat && row.lon) p.gps={lat:+row.lat, lon:+row.lon}; currentPage().pins.push(p);
+      }
+      saveProject(project); renderPins(); renderPinsList(); alert('Imported rows into current page.');
+    }
+
+    function toRows(){ const rows=[]; project.pages.forEach(pg=> (pg.pins||[]).forEach(p=> rows.push({
+      id:p.id, sign_type:p.sign_type||'', room_number:p.room_number||'', room_name:p.room_name||'', building:p.building||'', level:p.level||'', x_pct:fix(p.x_pct), y_pct:fix(p.y_pct), notes:p.notes||'', lat:p.gps?.lat||'', lon:p.gps?.lon||'', page_name:pg.name, last_edited: new Date(p.lastEdited||project.updatedAt).toISOString()
+    })) );
+      // sorting: building, level, room_number (natural-ish)
+      rows.sort((a,b)=> (a.building||'').localeCompare(b.building||'') || (a.level||'').localeCompare(b.level||'') || a.room_number.localeCompare(b.room_number, undefined, {numeric:true,sensitivity:'base'}) );
+      return rows;
+    }
+
+    /****************
+     * Helpers       *
+     ****************/
+    const projectContext={building:'', level:''};
+
+    function id(){ return Math.random().toString(36).slice(2,10); }
+    function newProject(name){ return { id:id(), name, createdAt:Date.now(), updatedAt:Date.now(), pages:[], settings:{ colorsByType:SIGN_TYPES, fieldMode:false, strictRules:false } } }
+    function currentPage(){ if(!project._pageId && project.pages[0]) project._pageId=project.pages[0].id; return project.pages.find(p=>p.id===project._pageId); }
+    function makePin(x_pct,y_pct){ return { id:id(), sign_type:'', room_number:'', room_name:'', building: inputBuilding.value||projectContext.building||'', level: inputLevel.value||projectContext.level||'', x_pct, y_pct, notes:'', photos:[], lastEdited:Date.now() } }
+    function findPin(idv){ for(const pg of project.pages){ const f=pg.pins.find(p=>p.id===idv); if(f) return f; } return null; }
+    function checkedPinIds(){ return [...pinList.querySelectorAll('input[type="checkbox"]:checked')].map(cb=>cb.dataset.id); }
+
+    function selectProject(pid){ project = projects.find(p=>p.id===pid); if(!project) return; currentProjectId=pid; localStorage.setItem('survey:lastOpenProjectId', pid); renderAll(); }
+    function saveProject(p){ p.updatedAt=Date.now(); const i=projects.findIndex(x=>x.id===p.id); if(i>=0) projects[i]=p; else projects.push(p); localStorage.setItem('survey:projects', JSON.stringify(projects)); }
+    function loadProjects(){ try{ return JSON.parse(localStorage.getItem('survey:projects')||'[]'); }catch{return []} }
+
+    function addImagePage(url, name){ const pg={ id:id(), name:name||'Image', kind:'image', blobUrl:url, pins:[], measurements:[], updatedAt:Date.now() }; project.pages.push(pg); if(!project._pageId) project._pageId=pg.id; saveProject(project); }
+    async function addPdfPages(file){ const url=URL.createObjectURL(file); const pdf=await pdfjsLib.getDocument(url).promise; for(let i=1;i<=pdf.numPages;i++){ const page=await pdf.getPage(i); const viewport=page.getViewport({scale:2}); const canvas=document.createElement('canvas'); canvas.width=viewport.width; canvas.height=viewport.height; const ctx=canvas.getContext('2d'); await page.render({canvasContext:ctx, viewport}).promise; const data=canvas.toDataURL('image/png'); const pg={ id:id(), name:`${file.name.replace(/\.[^.]+$/,'')} · p${i}`, kind:'pdf', pdfPage:i, blobUrl:data, pins:[], measurements:[], updatedAt:Date.now() }; project.pages.push(pg); }
+      if(!project._pageId && project.pages[0]) project._pageId=project.pages[0].id; saveProject(project); }
+
+    function toPctCoords(e){ const rect=stageImage.getBoundingClientRect(); const x=Math.min(Math.max(0,e.clientX-rect.left),rect.width); const y=Math.min(Math.max(0,e.clientY-rect.top),rect.height); return { x_pct: +(x/rect.width*100).toFixed(3), y_pct:+(y/rect.height*100).toFixed(3) } }
+    function toLocal(e){ const rect=stageImage.getBoundingClientRect(); return { x: e.clientX-rect.left, y: e.clientY-rect.top } }
+    function toScreen(pt){ const rect=stageImage.getBoundingClientRect(); return { x: rect.left+pt.x, y: rect.top+pt.y } }
+    function pctLabel(x,y){ return `${x.toFixed(2)}%, ${y.toFixed(2)}%`; }
+    function dist(a,b){ const dx=a.x-b.x, dy=a.y-b.y; return Math.sqrt(dx*dx+dy*dy); }
+    function fix(n){ return typeof n==='number'? +n.toFixed(3):'' }
+
+    function csvEscape(v){ const s=(v==null? '': String(v)); if(/[",\n]/.test(s)) return '"'+s.replace(/"/g,'""')+'"'; return s; }
+    function parseCsvLine(line){ const out=[]; let cur=''; let i=0; let inQ=false; while(i<line.length){ const ch=line[i++]; if(inQ){ if(ch==='"'){ if(line[i]==='"'){ cur+='"'; i++; } else { inQ=false; } } else { cur+=ch; } } else { if(ch===','){ out.push(cur); cur=''; } else if(ch==='"'){ inQ=true; } else { cur+=ch; } } } out.push(cur); return out; }
+
+    function fileToDataURL(file){ return new Promise((res,rej)=>{ const fr=new FileReader(); fr.onload=()=>res(fr.result); fr.onerror=rej; fr.readAsDataURL(file); }); }
+    function dataURLtoArrayBuffer(dataURL){ const bstr=atob(dataURL.split(',')[1]); const len=bstr.length; const buf=new Uint8Array(len); for(let i=0;i<len;i++) buf[i]=bstr.charCodeAt(i); return buf; }
+    function dataURLtoBlob(dataURL){ const arr=dataURL.split(','); const mime=arr[0].match(/:(.*?);/)[1]; const ab=dataURLtoArrayBuffer(dataURL); return new Blob([ab],{type:mime}); }
+
+    function downloadText(name, text){ downloadFile(name, new Blob([text],{type:'text/plain'})); }
+    function downloadFile(name, blob){ const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 1000); }
+
+    // Undo/Redo
+    function snapshot(){ return JSON.stringify(project); }
+    function loadSnapshot(s){ project=JSON.parse(s); const i=projects.findIndex(p=>p.id===project.id); if(i>=0) projects[i]=project; else projects.push(project); localStorage.setItem('survey:projects', JSON.stringify(projects)); localStorage.setItem('survey:lastOpenProjectId', project.id); }
+    function commit(){ UNDO.push(snapshot()); if(UNDO.length>MAX_UNDO) UNDO.shift(); REDO.length=0; }
+    function undo(){ if(!UNDO.length) return; REDO.push(snapshot()); const s=UNDO.pop(); loadSnapshot(s); renderAll(); }
+    function redo(){ if(!REDO.length) return; UNDO.push(snapshot()); const s=REDO.pop(); loadSnapshot(s); renderAll(); }
+
+    // Initial render
+    renderAll();
+
+    // Resize observer to keep SVG overlay sized
+    const ro=new ResizeObserver(()=>{ measureSvg.setAttribute('width', stage.clientWidth); measureSvg.setAttribute('height', stage.clientHeight); }); ro.observe(stage);
+
+    // Keyboard shortcuts
+    window.addEventListener('keydown',(e)=>{
+      if((e.ctrlKey||e.metaKey) && !e.shiftKey && e.key.toLowerCase()==='z'){ e.preventDefault(); undo(); }
+      if((e.ctrlKey||e.metaKey) && e.shiftKey && e.key.toLowerCase()==='z'){ e.preventDefault(); redo(); }
+      if(e.key==='Delete'){ const p=selectedPin(); if(p){ commit(); currentPage().pins=currentPage().pins.filter(x=>x.id!==p.id); saveProject(project); renderPins(); renderPinsList(); clearSelection(); } }
+      if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)){ const p=selectedPin(); if(!p) return; e.preventDefault(); commit(); const delta = project.settings.fieldMode? 0.5 : 0.2; if(e.key==='ArrowUp') p.y_pct=Math.max(0,p.y_pct-delta); if(e.key==='ArrowDown') p.y_pct=Math.min(100,p.y_pct+delta); if(e.key==='ArrowLeft') p.x_pct=Math.max(0,p.x_pct-delta); if(e.key==='ArrowRight') p.x_pct=Math.min(100,p.x_pct+delta); p.lastEdited=Date.now(); saveProject(project); renderPins(); updatePinDetails(); }
+    });
+  </script>
+</body>
+</html>
