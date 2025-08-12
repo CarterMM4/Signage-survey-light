@@ -1,9 +1,9 @@
-html = r"""<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Signage Survey – Single‑File (GitHub Pages Ready)</title>
+  <title>Signage Survey – Single-File (GitHub Pages Ready)</title>
   <!-- Inline SVG favicon to avoid 404s -->
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' ry='10' fill='%23131a33'/%3E%3Cpath d='M12 44 L28 20 L40 36 L52 24' stroke='%234cc9f0' stroke-width='6' fill='none'/%3E%3Ccircle cx='28' cy='20' r='3' fill='%23a3e635'/%3E%3Ccircle cx='40' cy='36' r='3' fill='%23a3e635'/%3E%3Ccircle cx='52' cy='24' r='3' fill='%23a3e635'/%3E%3C/svg%3E" />
   <style>
@@ -59,15 +59,13 @@ html = r"""<!DOCTYPE html>
     .help{font-size:.8rem; color:#97a3d9}
   </style>
 
-  <!-- Libraries from CDN (no integrity/crossorigin). This version requires internet.
-       If you want fully offline, you can paste the contents of these files inline later. -->
+  <!-- CDN libs (no integrity attributes). For fully offline, replace with inline copies later. -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.1.0/tesseract.min.js"></script>
   <script>
-    // Configure pdf.js worker (from same version)
     if (window['pdfjsLib']) {
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
     }
@@ -282,8 +280,8 @@ html = r"""<!DOCTYPE html>
     // Toolbar
     on($('btnNew'),'click',()=>{ const name=prompt('New project name?','New Project'); if(!name) return; commit(); const p=newProject(name); saveProject(p); selectProject(p.id); });
     on($('btnOpen'),'click',()=>{
-      const items = projects.map(p=>`• ${p.name} (${new Date(p.updatedAt).toLocaleString()}) [${p.id}]`).join('\\n');
-      const id = prompt('Projects:\\n'+items+'\\n\\nEnter project id to open:');
+      const items = projects.map(p=>`• ${p.name} (${new Date(p.updatedAt).toLocaleString()}) [${p.id}]`).join('\n');
+      const id = prompt('Projects:\n'+items+'\n\nEnter project id to open:');
       const found = projects.find(p=>p.id===id);
       if(found){ selectProject(found.id); } else alert('Not found');
     });
@@ -295,7 +293,7 @@ html = r"""<!DOCTYPE html>
       const files=[...e.target.files]; if(!files.length) return; commit();
       for(const f of files){
         if(f.type==='application/pdf'){ await addPdfPages(f); }
-        else if(f.type.startsWith('image/')){ const url=URL.createObjectURL(f); const name=f.name.replace(/\\.[^.]+$/,''); addImagePage(url,name); }
+        else if(f.type.startsWith('image/')){ const url=URL.createObjectURL(f); const name=f.name.replace(/\.[^.]+$/,''); addImagePage(url,name); }
       }
       renderAll();
     });
@@ -584,7 +582,7 @@ html = r"""<!DOCTYPE html>
     /****************
      * CSV / XLSX   *
      ****************/
-    function exportCSV(){ const rows = toRows(); const csv=[Object.keys(rows[0]||{}).join(','), ...rows.map(r=>Object.values(r).map(v=>csvEscape(v)).join(','))].join('\\n'); downloadText(project.name.replace(/\\W+/g,'_')+"_signage.csv", csv); }
+    function exportCSV(){ const rows = toRows(); const csv=[Object.keys(rows[0]||{}).join(','), ...rows.map(r=>Object.values(r).map(v=>csvEscape(v)).join(','))].join('\n'); downloadText(project.name.replace(/\W+/g,'_')+"_signage.csv", csv); }
 
     function exportXLSX(){
       const rows = toRows(); const wb = XLSX.utils.book_new();
@@ -594,19 +592,19 @@ html = r"""<!DOCTYPE html>
       const ws = XLSX.utils.json_to_sheet(rows, {header: Object.keys(rows[0]||{})});
       XLSX.utils.book_append_sheet(wb, wsInfo, 'Project Info'); XLSX.utils.book_append_sheet(wb, ws, 'Signage');
       const out = XLSX.write(wb, {bookType:'xlsx', type:'array'});
-      downloadFile(project.name.replace(/\\W+/g,'_')+'_signage.xlsx', new Blob([out], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+      downloadFile(project.name.replace(/\W+/g,'_')+'_signage.xlsx', new Blob([out], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
     }
 
     async function exportZIP(){
       const rows=toRows(); const zip=new JSZip();
-      zip.file('signage.csv', [Object.keys(rows[0]||{}).join(','), ...rows.map(r=>Object.values(r).map(v=>csvEscape(v)).join(','))].join('\\n'));
+      zip.file('signage.csv', [Object.keys(rows[0]||{}).join(','), ...rows.map(r=>Object.values(r).map(v=>csvEscape(v)).join(','))].join('\n'));
       // photos
       project.pages.forEach(pg=> pg.pins.forEach(pin=> pin.photos?.forEach((ph, idx)=>{ const folder=zip.folder(`photos/${pin.id}`); folder.file(ph.name||`photo_${idx+1}.png`, dataURLtoArrayBuffer(ph.dataUrl)); })) );
-      const blob = await zip.generateAsync({type:'blob'}); downloadFile(project.name.replace(/\\W+/g,'_')+'_export.zip', blob);
+      const blob = await zip.generateAsync({type:'blob'}); downloadFile(project.name.replace(/\W+/g,'_')+'_export.zip', blob);
     }
 
     function importCSV(text){
-      const lines = text.split(/\\r?\\n/).filter(Boolean);
+      const lines = text.split(/\r?\n/).filter(Boolean);
       if(lines.length<2) return;
       const hdr=lines[0].split(',').map(h=>h.trim()); commit();
       for(let i=1;i<lines.length;i++){
@@ -653,7 +651,7 @@ html = r"""<!DOCTYPE html>
         const canvas=document.createElement('canvas'); canvas.width=viewport.width; canvas.height=viewport.height;
         const ctx=canvas.getContext('2d'); await page.render({canvasContext:ctx, viewport}).promise;
         const data=canvas.toDataURL('image/png');
-        const pg={ id:id(), name:`${file.name.replace(/\\.[^.]+$/,'')} · p${i}`, kind:'pdf', pdfPage:i, blobUrl=data, pins:[], measurements:[], updatedAt:Date.now() }; project.pages.push(pg);
+        const pg={ id:id(), name:`${file.name.replace(/\.[^.]+$/,'')} · p${i}`, kind:'pdf', pdfPage:i, blobUrl=data, pins:[], measurements:[], updatedAt:Date.now() }; project.pages.push(pg);
       }
       if(!project._pageId && project.pages[0]) project._pageId=project.pages[0].id; saveProject(project);
     }
@@ -665,11 +663,17 @@ html = r"""<!DOCTYPE html>
     function dist(a,b){ const dx=a.x-b.x, dy=a.y-b.y; return Math.sqrt(dx*dx+dy*dy); }
     function fix(n){ return typeof n==='number'? +Number(n||0).toFixed(3):'' }
 
-    function csvEscape(v){ const s=(v==null? '': String(v)); if(/[",\\n]/.test(s)) return '"'+s.replace(/"/g,'""')+'"'; return s; }
+    function csvEscape(v){ const s=(v==null? '': String(v)); if(/["\n,]/.test(s)) return '"'+s.replace(/"/g,'""')+'"'; return s; }
     function parseCsvLine(line){ const out=[]; let cur=''; let i=0; let inQ=false; while(i<line.length){ const ch=line[i++]; if(inQ){ if(ch==='"'){ if(line[i]==='"'){ cur+='"'; i++; } else { inQ=false; } } else { cur+=ch; } } else { if(ch===','){ out.push(cur); cur=''; } else if(ch==='"'){ inQ=true; } else { cur+=ch; } } } out.push(cur); return out; }
     function fileToDataURL(file){ return new Promise((res,rej)=>{ const fr=new FileReader(); fr.onload=()=>res(fr.result); fr.onerror=rej; fr.readAsDataURL(file); }); }
     function dataURLtoArrayBuffer(dataURL){ const bstr=atob(dataURL.split(',')[1]); const len=bstr.length; const buf=new Uint8Array(len); for(let i=0;i<len;i++) buf[i]=bstr.charCodeAt(i); return buf; }
-    function dataURLtoBlob(dataURL){ const arr=dataURL.split(','); const mime=(arr[0].match(/:(.*?);/)|[])[1]||'image/png'; const ab=dataURLtoArrayBuffer(dataURL); return new Blob([ab],{type:mime}); }
+    function dataURLtoBlob(dataURL){
+      const arr=dataURL.split(',');
+      const match = (arr[0].match(/:(.*?);/) || []);
+      const mime = match[1] || 'image/png';
+      const ab=dataURLtoArrayBuffer(dataURL);
+      return new Blob([ab],{type:mime});
+    }
     function downloadText(name, text){ downloadFile(name, new Blob([text],{type:'text/plain'})); }
     function downloadFile(name, blob){ const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 1000); }
 
@@ -695,4 +699,3 @@ html = r"""<!DOCTYPE html>
   </script>
 </body>
 </html>
-"""
