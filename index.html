@@ -1,7 +1,3 @@
-# We'll generate a single-file HTML app (CDN-based for now due to no internet access to embed library code).
-# The file will be readable, with DOMContentLoaded wrapper, and no integrity attributes.
-# Save it at /mnt/data/index.html for the user to download.
-
 html = r"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -700,8 +696,3 @@ html = r"""<!DOCTYPE html>
 </body>
 </html>
 """
-# Write file
-with open('/mnt/data/index.html', 'w', encoding='utf-8') as f:
-    f.write(html)
-
-'/mnt/data/index.html'
