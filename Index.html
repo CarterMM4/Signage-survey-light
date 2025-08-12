@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+<title>Signage Survey Lite</title>
+<meta name="theme-color" content="#0ea5e9">
+<style>
+:root{--bg:#0b1117;--panel:#0f172a;--text:#e5e7eb;--muted:#94a3b8;--brand:#0ea5e9}
+*{box-sizing:border-box}html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font:14px/1.4 system-ui,Segoe UI,Roboto,Helvetica,Arial}
+button,input,select,textarea{font:inherit}
+.app{display:grid;grid-template-rows:auto 1fr;height:100%}
+.toolbar{display:flex;flex-wrap:wrap;gap:.5rem;padding:.75rem;border-bottom:1px solid #1f2937;background:var(--panel);position:sticky;top:0;z-index:5}
+.btn{background:#1f2937;border:1px solid #334155;color:var(--text);padding:.5rem .75rem;border-radius:.6rem;cursor:pointer}
+.btn:hover{background:#273244}
+.field{background:#0b1220;border:1px solid #1f2a3f;color:var(--text);padding:.4rem .55rem;border-radius:.5rem}
+.layout{display:grid;grid-template-columns:220px 1fr 320px;gap:0;height:100%}
+.left{border-right:1px solid #1f2937;background:#0c1422;overflow:auto}
+.center{position:relative;overflow:auto;background:#0a0f18}
+.right{border-left:1px solid #1f2937;background:#0c1422;overflow:auto;padding:12px}
+.thumb{padding:10px;border-bottom:1px solid #101826;cursor:pointer}
+.thumb.active{background:#0d1b2b}
+.thumb .name{color:#d1d5db;font-size:12px}
+.canvas-wrap{position:relative;margin:0 auto;max-width:2400px}
+.canvas-wrap img{width:100%;height:auto;display:block}
+.pin{position:absolute;transform:translate(-50%,-50%);padding:.2rem .45rem;border-radius:999px;color:#fff;font-weight:700;font-size:12px;cursor:pointer;border:1px solid rgba(255,255,255,.3);box-shadow:0 0 0 2px rgba(0,0,0,.25)}
+.pin.sel{outline:2px solid #fde047}
+.group{margin-bottom:10px}.label{display:block;color:var(--muted);font-size:12px;margin-bottom:4px}
+.input,.select,.textarea{width:100%;background:#0b1220;border:1px solid #1f2a3f;color:#e5e7eb;padding:.45rem .55rem;border-radius:.5rem}
+.textarea{min-height:60px;resize:vertical}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:.5rem}
+.hidden{display:none}
+.tips{background:#0b1220;border:1px solid #1f2a3f;border-radius:.6rem;padding:.5rem}
+.footer-space{height:24px}
+</style>
+</head><body>
+<div class="app">
+  <div class="toolbar">
+    <button class="btn" id="newProject">New Project</button>
+    <select class="field" id="openProject"></select>
+    <button class="btn" id="saveAs">Save As…</button>
+
+    <input class="hidden" type="file" id="upload" accept=".png,.jpg,.jpeg" multiple>
+    <button class="btn" id="uploadBtn">Upload Images</button>
+
+    <span style="flex:1 1 auto"></span>
+
+    <input class="field" id="bldg" placeholder="Building" style="width:120px">
+    <input class="field" id="level" placeholder="Level" style="width:100px">
+
+    <button class="btn" id="exportCsv">Export CSV</button>
+
+    <input class="field" id="search" placeholder="Search…" style="min-width:160px">
+    <select class="field" id="filterType"></select>
+
+    <button class="btn" id="clearPage">Clear Page Pins</button>
+  </div>
+
+  <div class="layout">
+    <div class="left" id="thumbs"></div>
+    <div class="center"><div class="canvas-wrap" id="canvas"></div></div>
+    <div class="right" id="rightPanel">
+      <h3 style="margin:6px 0 10px 0">Sign Details</h3>
+      <div class="label" style="color:#9ca3af" id="noSel">Select or add a pin.</div>
+      <div id="pinForm" class="hidden">
+        <div class="group"><label class="label">Sign Type</label><select id="f_type" class="select"></select></div>
+        <div class="cols">
+          <div class="group"><label class="label">Room #</label><input id="f_roomnum" class="input"></div>
+          <div class="group"><label class="label">Level</label><input id="f_level" class="input"></div>
+        </div>
+        <div class="group"><label class="label">Room Name</label><input id="f_roomname" class="input"></div>
+        <div class="group"><label class="label">Building</label><input id="f_building" class="input"></div>
+        <div class="group"><label class="label">Notes</label><textarea id="f_notes" class="textarea"></textarea></div>
+        <div id="posReadout" style="color:#9ca3af;font-size:12px"></div>
+        <div class="group">
+          <label class="label">Add Photo</label>
+          <input type="file" id="f_photo" accept="image/*" capture="environment">
+          <div id="photoRow" style="display:flex; gap:6px; flex-wrap:wrap; margin-top:6px"></div>
+        </div>
+        <div class="group">
+          <button class="btn" id="duplicate">Duplicate</button>
+          <button class="btn" id="delete">Delete</button>
+        </div>
+        <div class="tips"><div style="color:#9ca3af;font-size:12px">
+          Soft rules only. Electrical/Data typically BOH. Exits allowed on any level. Hall Direct uses plan text.
+        </div></div>
+      </div>
+      <div class="footer-space"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const SIGN_TYPES={"FOH":"#0ea5e9","BOH":"#64748b","Elevator":"#8b5cf6","UNIT ID":"#22c55e","Stair - Ingress":"#22c55e","Stair - Egress":"#ef4444","Ingress":"#22c55e","Egress":"#ef4444","Hall Direct":"#f59e0b","Callbox":"#06b6d4","Evac":"#84cc16","Exit":"#ef4444","Restroom":"#10b981"}
+const SHORTS={"Elevator":"ELV","Hall Direct":"HD","Callbox":"CB","Evac":"EV","Ingress":"ING","Egress":"EGR","Exit":"EXIT","Restroom":"WC","UNIT ID":"UNIT","FOH":"FOH","BOH":"BOH","Stair - Ingress":"ING","Stair - Egress":"EGR"}
+const $=s=>document.querySelector(s); const el=(t,a={},k=[])=>{const n=document.createElement(t);for(const p in a){if(p==='style')Object.assign(n.style,a[p]);else n.setAttribute(p,a[p])}k.forEach(c=>n.append(c));return n}
+const storeKey='survey:projects-lite', lastKey='survey:last-lite'
+let projects=JSON.parse(localStorage.getItem(storeKey)||'[]'), current=null, pageIndex=0, selectedPinId=null, filterType='', searchText=''
+
+function save(){localStorage.setItem(storeKey,JSON.stringify(projects))}
+function setLast(id){localStorage.setItem(lastKey,id)}
+function getLast(){return localStorage.getItem(lastKey)}
+function emptyProject(){return {id:'p_'+Math.random().toString(36).slice(2),name:'Untitled Project',createdAt:Date.now(),updatedAt:Date.now(),pages:[],lastBuilding:'',lastLevel:''}}
+function newProject(){const p=emptyProject();projects.push(p);save();openProject(p.id)}
+function saveAs(){if(!current)return;const c=JSON.parse(JSON.stringify(current));c.id='p_'+Math.random().toString(36).slice(2);c.name=current.name+' (Copy)';projects.push(c);save();openProject(c.id)}
+function openProject(id){current=projects.find(p=>p.id===id)||projects[projects.length-1]||null;pageIndex=0;selectedPinId=null;setLast(current?.id||'');renderAll()}
+function renderProjectPicker(){const sel=$('#openProject'); sel.innerHTML='<option value="" disabled selected>Open Project…</option>'+projects.map(p=>'<option value="'+p.id+'">'+p.name+'</option>').join(''); if(current) sel.value=current.id; sel.onchange=()=>openProject(sel.value)}
+function addPageFromImage(file){const r=new FileReader(); r.onload=()=>{const pg={id:'pg_'+Math.random().toString(36).slice(2),name:file.name,kind:'image',dataUrl:r.result,pins:[]}; current.pages.push(pg); current.updatedAt=Date.now(); save(); pageIndex=current.pages.length-1; renderAll()}; r.readAsDataURL(file)}
+function renderThumbs(){const box=$('#thumbs'); box.innerHTML=''; (current.pages||[]).forEach((pg,i)=>{const th=el('div',{class:'thumb'+(i===pageIndex?' active':'' )},[el('div',{class:'name'},[document.createTextNode(pg.name)])]); th.onclick=()=>{pageIndex=i;selectedPinId=null;renderAll()}; box.append(th) })}
+function renderCanvas(){const wrap=$('#canvas'); wrap.innerHTML=''; const page=current.pages[pageIndex]; if(!page) return; const img=el('img',{src:page.dataUrl}); wrap.append(img); page.pins.forEach(p=>{ if(filterType&&p.sign_type!==filterType)return; if(searchText){const hay=(p.sign_type+' '+p.room_number+' '+p.room_name+' '+p.building+' '+p.level+' '+(p.notes||'')).toLowerCase(); if(!hay.includes(searchText)) return} const d=el('div',{class:'pin'+(p.id===selectedPinId?' sel':''),style:{left:p.x_pct+'%',top:p.y_pct+'%',background:SIGN_TYPES[p.sign_type]||'#334155'}},[document.createTextNode(SHORTS[p.sign_type]||p.sign_type.slice(0,4).toUpperCase())]); d.onpointerdown=e=>{e.preventDefault();selectedPinId=p.id;renderRight();d.setPointerCapture(e.pointerId)}; d.onpointermove=e=>{if(e.buttons!==1)return;const r=wrap.getBoundingClientRect();const x=((e.clientX-r.left)/r.width)*100,y=((e.clientY-r.top)/r.height)*100;p.x_pct=Math.max(0,Math.min(100,x));p.y_pct=Math.max(0,Math.min(100,y));p.lastEdited=Date.now();current.updatedAt=Date.now();save();d.style.left=p.x_pct+'%';d.style.top=p.y_pct+'%';renderRightPos()}; d.onclick=e=>{e.stopPropagation();selectedPinId=p.id;renderRight()}; wrap.append(d)}); wrap.onclick=e=>{const r=wrap.getBoundingClientRect();const x=((e.clientX-r.left)/r.width)*100,y=((e.clientY-r.top)/r.height)*100;addPinAt(x,y)}}
+function addPinAt(x,y){const page=current.pages[pageIndex]; if(!page)return; const id='pin_'+Math.random().toString(36).slice(2); const pin={id,sign_type:'FOH',room_number:'',room_name:'',building:current.lastBuilding||'',level:current.lastLevel||'',x_pct:x,y_pct:y,notes:'',photos:[],lastEdited:Date.now()}; page.pins.push(pin); selectedPinId=id; current.updatedAt=Date.now(); save(); renderAll(); if(navigator.geolocation){navigator.geolocation.getCurrentPosition(pos=>{pin.gps={lat:pos.coords.latitude,lon:pos.coords.longitude}; pin.lastEdited=Date.now(); save(); if(selectedPinId===id) renderRight()},()=>{})}}
+function renderRight(){const page=current.pages[pageIndex]; const pin=page?.pins.find(p=>p.id===selectedPinId); const noSel=$('#noSel'),form=$('#pinForm'); if(!pin){noSel.classList.remove('hidden'); form.classList.add('hidden'); return} noSel.classList.add('hidden'); form.classList.remove('hidden'); const typeSel=$('#f_type'); typeSel.innerHTML=Object.keys(SIGN_TYPES).map(k=>'<option>'+k+'</option>').join(''); typeSel.value=pin.sign_type; $('#f_roomnum').value=pin.room_number||''; $('#f_roomname').value=pin.room_name||''; $('#f_building').value=pin.building||''; $('#f_level').value=pin.level||''; $('#f_notes').value=pin.notes||''; renderRightPos(); const row=$('#photoRow'); row.innerHTML=''; pin.photos.forEach(ph=>{const im=el('img',{src:ph.dataUrl,style:{width:'64px',height:'64px',objectFit:'cover',borderRadius:'8px',border:'1px solid #1f2a3f'}}); row.append(im)}); typeSel.onchange=()=>{pin.sign_type=typeSel.value;pin.lastEdited=Date.now();save();renderCanvas()}; $('#f_roomnum').oninput=e=>{pin.room_number=e.target.value;pin.lastEdited=Date.now();save()}; $('#f_roomname').oninput=e=>{pin.room_name=e.target.value;pin.lastEdited=Date.now();save()}; $('#f_building').oninput=e=>{pin.building=e.target.value;pin.lastEdited=Date.now();save()}; $('#f_level').oninput=e=>{pin.level=e.target.value;pin.lastEdited=Date.now();save()}; $('#f_notes').oninput=e=>{pin.notes=e.target.value;pin.lastEdited=Date.now();save()}; $('#f_photo').onchange=e=>{const f=e.target.files?.[0]; if(!f)return; const rd=new FileReader(); rd.onload=()=>{pin.photos.push({name:f.name,dataUrl:rd.result}); pin.lastEdited=Date.now(); save(); renderRight()}; rd.readAsDataURL(f)}; $('#duplicate').onclick=()=>{const copy=JSON.parse(JSON.stringify(pin)); copy.id='pin_'+Math.random().toString(36).slice(2); copy.x_pct=Math.min(100,pin.x_pct+2); copy.y_pct=Math.min(100,pin.y_pct+2); copy.lastEdited=Date.now(); page.pins.push(copy); selectedPinId=copy.id; save(); renderAll()}; $('#delete').onclick=()=>{page.pins=page.pins.filter(p=>p.id!==pin.id); selectedPinId=null; save(); renderAll()}}
+function renderRightPos(){const page=current.pages[pageIndex]; const pin=page?.pins.find(p=>p.id===selectedPinId); if(!pin)return; $('#posReadout').textContent=`Position: ${pin.x_pct.toFixed(2)}%, ${pin.y_pct.toFixed(2)}%`+(pin.gps?`  |  GPS: ${pin.gps.lat.toFixed(5)}, ${pin.gps.lon.toFixed(5)}`:'')}
+function sortSigns(a,b){const ba=(a.building||'').localeCompare(b.building||''); if(ba!==0)return ba; const la=(a.level||'').localeCompare(b.level||''); if(la!==0)return la; return (a.room_number||'').localeCompare(b.room_number||'',undefined,{numeric:true,sensitivity:'base'})}
+function exportCsv(){const rows=[]; current.pages.forEach(pg=>pg.pins.forEach(p=>rows.push({id:p.id,sign_type:p.sign_type,room_number:p.room_number,room_name:p.room_name,building:p.building,level:p.level,x_pct:p.x_pct,y_pct:p.y_pct,notes:p.notes||'',lat:p.gps?.lat||'',lon:p.gps?.lon||'',page_name:pg.name,last_edited:new Date(p.lastEdited).toISOString()}))); rows.sort(sortSigns); const headers=Object.keys(rows[0]||{id:'',sign_type:'',room_number:'',room_name:'',building:'',level:'',x_pct:'',y_pct:'',notes:'',lat:'',lon:'',page_name:'',last_edited:''}); const csv=[headers.join(",")].concat(rows.map(r=>headers.map(h=>String(r[h]||'').replace(/"/g,'""')).map(x=>`"${x}"`).join(","))).join("\n"); const blob=new Blob([csv],{type:'text/csv;charset=utf-8'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=(current.name.replace(/[^a-z0-9\-]+/gi,'-')||'project')+'_export.csv'; a.click(); URL.revokeObjectURL(a.href)}
+function renderTop(){const s=$('#filterType'); s.innerHTML='<option value="">All Types</option>'+Object.keys(SIGN_TYPES).map(k=>'<option>'+k+'</option>').join(''); s.value=filterType}
+function renderAll(){ if(!current){$('#thumbs').innerHTML=''; $('#canvas').innerHTML='<div style="padding:16px;color:#94a3b8">Create a project and upload images to get started.</div>'; $('#rightPanel').scrollTop=0; renderProjectPicker(); renderTop(); return } renderProjectPicker(); renderTop(); renderThumbs(); renderCanvas(); renderRight() }
+function init(){ $('#newProject').onclick=newProject; $('#saveAs').onclick=saveAs; $('#uploadBtn').onclick=()=>$('#upload').click(); $('#upload').onchange=e=>{const files=Array.from(e.target.files||[]); if(!current)newProject(); files.forEach(addPageFromImage)}; $('#exportCsv').onclick=exportCsv; $('#clearPage').onclick=()=>{const pg=current.pages[pageIndex]; if(pg&&confirm('Clear all pins on this page?')){pg.pins=[]; save(); renderAll()}}; $('#bldg').oninput=e=>{if(!current)return; current.lastBuilding=e.target.value; save()}; $('#level').oninput=e=>{if(!current)return; current.lastLevel=e.target.value; save()}; $('#filterType').onchange=e=>{filterType=e.target.value; renderCanvas()}; $('#search').oninput=e=>{searchText=(e.target.value||'').toLowerCase(); renderCanvas()}; const last=getLast(); if(projects.length && last){current=projects.find(p=>p.id===last)||projects[0]} else if(projects.length){current=projects[0]} renderAll() }
+init()
+</script>
+</body></html>
