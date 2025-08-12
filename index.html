@@ -1,143 +1,129 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Signage Survey Tool</title>
-<style>
-  body { margin: 0; font-family: Arial, sans-serif; background: #f3f4f6; color: #111; }
-  header { background: #111827; color: white; padding: 10px; display: flex; align-items: center; justify-content: space-between; }
-  header h1 { margin: 0; font-size: 18px; }
-  button { padding: 6px 12px; margin: 2px; background: #2563eb; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
-  button:hover { background: #1e40af; }
-  main { display: flex; height: calc(100vh - 50px); }
-  #sidebar { width: 250px; background: #e5e7eb; padding: 10px; overflow-y: auto; }
-  #stageContainer { flex: 1; position: relative; background: #fff; display: flex; align-items: center; justify-content: center; overflow: auto; }
-  #stageImage { max-width: 100%; max-height: 100%; }
-  .pin { position: absolute; width: 14px; height: 14px; background: red; border-radius: 50%; cursor: pointer; transform: translate(-50%, -50%); }
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Signage Survey</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' ry='10' fill='%23131a33'/%3E%3Cpath d='M12 44 L28 20 L40 36 L52 24' stroke='%234cc9f0' stroke-width='6' fill='none'/%3E%3Ccircle cx='28' cy='20' r='3' fill='%23a3e635'/%3E%3Ccircle cx='40' cy='36' r='3' fill='%23a3e635'/%3E%3Ccircle cx='52' cy='24' r='3' fill='%23a3e635'/%3E%3C/svg%3E" />
+  <style>
+    :root{
+      --bg:#0b1020;--panel:#11162a;--text:#e6e9f5;--muted:#aab0c6;--accent:#4cc9f0;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+    .app{display:grid;grid-template-rows:auto 1fr;height:100%}
+    .toolbar{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;padding:.6rem .8rem;background:#111936;border-bottom:1px solid #263056;position:sticky;top:0;z-index:5}
+    .toolbar .group{display:flex;gap:.4rem;align-items:center;background:#0f1731;border:1px solid #263056;border-radius:10px;padding:.35rem .45rem}
+    button{background:#1b2242;border:1px solid #2c3766;color:var(--text);padding:.45rem .65rem;border-radius:8px;cursor:pointer}
+    button:hover{background:#232d57}
+    input,select{background:#0e1631;border:1px solid #2a355f;color:var(--text);padding:.45rem .55rem;border-radius:8px}
+    .pill{display:inline-flex;gap:.4rem;align-items:center;padding:.25rem .5rem;border:1px solid #2a355f;border-radius:999px;background:#0e1631}
+    .layout{display:grid;grid-template-columns:240px 1fr 340px;gap:.75rem;padding:.75rem;height:100%}
+    .panel{background:#11162a;border:1px solid #23305b;border-radius:14px;overflow:hidden;display:flex;flex-direction:column;min-height:0}
+    .panel h3{margin:0;padding:.6rem .75rem;border-bottom:1px solid #23305b;background:#121938;font-size:.95rem;color:#c9d2ff}
+    .thumbs{padding:.5rem;overflow:auto;display:grid;gap:.5rem}
+    .thumb{background:#0f1733;border:1px solid #263056;border-radius:10px;padding:.35rem;cursor:pointer}
+    .thumb.active{outline:2px solid var(--accent)}
+    .thumb img{width:100%;height:110px;object-fit:cover;border-radius:6px;background:#060a18}
+    .thumb input{width:100%;margin-top:.35rem;font-size:.8rem}
+    .stage{position:relative;background:#0a0f22;border-radius:14px;border:1px dashed #2b3562;display:flex;align-items:center;justify-content:center;overflow:hidden}
+    .stage-inner{position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center}
+    #stageImage{max-width:100%;max-height:100%;display:block}
+    #pinLayer{position:absolute;inset:0;pointer-events:none}
+    .pin{position:absolute;transform:translate(-50%,-100%);padding:.18rem .35rem;font-size:.75rem;border-radius:999px;border:1px solid rgba(0,0,0,.35);color:#0b0f1d;font-weight:700;box-shadow:0 3px 10px rgba(0,0,0,.35);pointer-events:auto}
+    .pin.selected{outline:2px solid #fff}
+    .right{padding:0;overflow:auto}
+    .section{padding:.6rem .75rem;border-bottom:1px solid #23305b}
+    .row{display:grid;grid-template-columns:110px 1fr;gap:.5rem;align-items:center;margin:.35rem 0}
+    .list{max-height:320px;overflow:auto;display:grid;gap:.35rem}
+    .list .item{display:grid;grid-template-columns:20px 1fr auto;align-items:center;gap:.5rem;padding:.35rem .45rem;border:1px solid #27335f;border-radius:10px;background:#0e1634}
+    .muted{color:var(--muted)}
+    .hidden{display:none}
+    .ok{background:#1f3b2f;border-color:#2c6b49}
+  </style>
+
+  <!-- libs used later (pdf.js for PDFs) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+  <script>
+    if (window['pdfjsLib']) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc =
+        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+    }
+  </script>
 </head>
 <body>
+  <div class="app">
+    <div class="toolbar">
+      <div class="group">
+        <button id="btnNew">New Project</button>
+        <button id="btnOpen">Open</button>
+        <button id="btnSaveAs">Save As…</button>
+        <button id="btnRename">Rename</button>
+      </div>
 
-<header>
-  <h1>Signage Survey Tool</h1>
-  <div>
-    <button id="btnNew">New Project</button>
-    <button id="btnOpen">Open</button>
-    <button id="btnRename">Rename</button>
-    <button id="btnUpload">Upload</button>
-    <input type="file" id="inputUpload" style="display:none" multiple>
+      <div class="group">
+        <input type="file" id="inputUpload" accept="image/*,application/pdf" multiple class="hidden" />
+        <button id="btnUpload">Upload Map / Plan</button>
+        <label class="pill">Building <input id="inputBuilding" style="width:120px" placeholder="A"/></label>
+        <label class="pill">Level <input id="inputLevel" style="width:80px" placeholder="1"/></label>
+      </div>
+
+      <div class="group">
+        <select id="filterType"><option value="">All Types</option></select>
+        <input id="inputSearch" placeholder="Search…" style="width:180px"/>
+        <label class="pill"><input type="checkbox" id="toggleField"> Field Mode</label>
+      </div>
+
+      <div class="group">
+        <button id="btnAddPin">Add Pin</button>
+        <button id="btnClearPins">Clear Page</button>
+      </div>
+
+      <div class="muted" id="projectLabel" style="margin-left:auto">—</div>
+    </div>
+
+    <div class="layout">
+      <!-- left: pages -->
+      <div class="panel">
+        <h3>Pages</h3>
+        <div class="thumbs" id="thumbs"></div>
+        <div class="section muted" style="font-size:.85rem">Tip: Click a page to switch. Rename under each thumbnail.</div>
+      </div>
+
+      <!-- middle: stage -->
+      <div class="panel stage" id="stage">
+        <div class="stage-inner">
+          <img id="stageImage" alt="No page yet"/>
+          <div id="pinLayer"></div>
+        </div>
+      </div>
+
+      <!-- right: details + list -->
+      <div class="panel right">
+        <h3>Sign Details</h3>
+        <div class="section">
+          <div class="row"><div>Selected</div><div id="selId" class="muted">None</div></div>
+          <div class="row"><div>Type</div><select id="fieldType"></select></div>
+          <div class="row"><div>Room #</div><input id="fieldRoomNum"/></div>
+          <div class="row"><div>Room Name</div><input id="fieldRoomName"/></div>
+          <div class="row"><div>Building</div><input id="fieldBuilding"/></div>
+          <div class="row"><div>Level</div><input id="fieldLevel"/></div>
+          <div class="row"><div>Notes</div><input id="fieldNotes"/></div>
+        </div>
+
+        <h3>Pins (This Page)</h3>
+        <div class="section">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:.5rem">
+            <button id="btnBulkType">Bulk: Set Type</button>
+            <button id="btnBulkBL">Bulk: Set Bldg/Level</button>
+          </div>
+          <div class="list" id="pinList"></div>
+        </div>
+      </div>
+    </div>
   </div>
-</header>
 
-<main>
-  <div id="sidebar">
-    <button id="btnAddPin">Add Pin</button>
-    <button id="btnClearPins">Clear Pins</button>
-    <button id="btnExportCSV">Export CSV</button>
-    <button id="btnExportXLSX">Export XLSX</button>
-  </div>
-  <div id="stageContainer">
-    <img id="stageImage">
-    <div id="pinLayer" style="position:absolute;top:0;left:0;right:0;bottom:0;"></div>
-  </div>
-</main>
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<script>
-  let projects = [], project = null;
-  const stageImage = document.getElementById('stageImage');
-  const pinLayer = document.getElementById('pinLayer');
-  const inputUpload = document.getElementById('inputUpload');
-
-  function id(){ return Math.random().toString(36).slice(2,10); }
-  function newProject(name){ return { id:id(), name, createdAt:Date.now(), updatedAt:Date.now(), pages:[], pins:[] }; }
-  function saveProject(p){ const idx = projects.findIndex(x=>x.id===p.id); if(idx>=0) projects[idx]=p; else projects.push(p); localStorage.setItem('projects', JSON.stringify(projects)); }
-  function loadProjects(){ try { return JSON.parse(localStorage.getItem('projects')||'[]'); } catch { return []; } }
-  
-  function renderPins(){
-    pinLayer.innerHTML = '';
-    (project.pins||[]).forEach(pin=>{
-      const el = document.createElement('div');
-      el.className = 'pin';
-      el.style.left = pin.x_pct + '%';
-      el.style.top = pin.y_pct + '%';
-      el.dataset.id = pin.id;
-      el.onclick = () => alert(`Pin: ${pin.id}`);
-      pinLayer.appendChild(el);
-    });
-  }
-
-  document.getElementById('btnNew').onclick = ()=>{
-    const name = prompt('Project name?');
-    if(!name) return;
-    project = newProject(name);
-    saveProject(project);
-  };
-
-  document.getElementById('btnOpen').onclick = ()=>{
-    const items = projects.map(p=>`${p.name} (${p.id})`).join('\n');
-    const idv = prompt('Enter project id:\n' + items);
-    const found = projects.find(p=>p.id===idv);
-    if(found) project = found;
-  };
-
-  document.getElementById('btnRename').onclick = ()=>{
-    if(!project) return;
-    const name = prompt('New name?', project.name);
-    if(name) { project.name = name; saveProject(project); }
-  };
-
-  document.getElementById('btnUpload').onclick = ()=> inputUpload.click();
-
-  inputUpload.onchange = async (e)=>{
-    const files = [...e.target.files];
-    for(const f of files){
-      if(f.type==='application/pdf'){
-        const url = URL.createObjectURL(f);
-        const pdf = await pdfjsLib.getDocument(url).promise;
-        const page = await pdf.getPage(1);
-        const viewport = page.getViewport({scale:2});
-        const canvas = document.createElement('canvas');
-        canvas.width = viewport.width; canvas.height = viewport.height;
-        await page.render({canvasContext:canvas.getContext('2d'), viewport}).promise;
-        stageImage.src = canvas.toDataURL('image/png');
-      } else if(f.type.startsWith('image/')){
-        stageImage.src = URL.createObjectURL(f);
-      }
-    }
-  };
-
-  document.getElementById('btnAddPin').onclick = ()=>{
-    pinLayer.onclick = (e)=>{
-      const rect = pinLayer.getBoundingClientRect();
-      const x_pct = ((e.clientX - rect.left) / rect.width) * 100;
-      const y_pct = ((e.clientY - rect.top) / rect.height) * 100;
-      project.pins.push({ id:id(), x_pct, y_pct });
-      saveProject(project);
-      renderPins();
-      pinLayer.onclick = null;
-    };
-  };
-
-  document.getElementById('btnClearPins').onclick = ()=>{
-    if(confirm('Clear all pins?')) { project.pins = []; saveProject(project); renderPins(); }
-  };
-
-  document.getElementById('btnExportCSV').onclick = ()=>{
-    let csv = "id,x_pct,y_pct\n" + project.pins.map(p=>`${p.id},${p.x_pct},${p.y_pct}`).join("\n");
-    const blob = new Blob([csv], {type:'text/csv'});
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = (project.name||'project') + '.csv';
-    a.click();
-  };
-
-  document.getElementById('btnExportXLSX').onclick = ()=>{
-    alert('XLSX export not implemented in this demo.');
-  };
-
-  projects = loadProjects();
-  if(projects.length) project = projects[0];
-</script>
+  <!-- your external app script -->
+  <script src="app.js"></script>
 </body>
 </html>
