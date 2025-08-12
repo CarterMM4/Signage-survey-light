@@ -154,7 +154,19 @@ document.addEventListener('DOMContentLoaded', () => {
     return project.pages.find(p=>p.id===project._pageId);
   }
   function makePin(x_pct,y_pct){
-    return { id:id(), sign_type:'', room_number:'', room_name:'', building: inputBuilding.value||projectContext.building||'', level: inputLevel.value||projectContext.level||'', x_pct, y_pct, notes:'', photos:[], lastEdited:Date.now() };
+    return {
+      id:id(),
+      sign_type:'',
+      room_number:'',
+      room_name:'',
+      building: inputBuilding.value||projectContext.building||'',
+      level: inputLevel.value||projectContext.level||'',
+      x_pct:x_pct,
+      y_pct:y_pct,
+      notes:'',
+      photos:[],
+      lastEdited:Date.now()
+    };
   }
   function findPin(idv){
     for(const pg of project.pages){ const f=(pg.pins||[]).find(p=>p.id===idv); if(f) return f; }
@@ -186,6 +198,7 @@ document.addEventListener('DOMContentLoaded', () => {
     saveProject(project);
   }
   async function addPdfPages(file){
+    if (!window.pdfjsLib) { alert('PDF.js not loaded'); return; }
     const url=URL.createObjectURL(file);
     const pdf=await pdfjsLib.getDocument(url).promise;
     for(let i=1;i<=pdf.numPages;i++){
@@ -194,7 +207,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const canvas=document.createElement('canvas'); canvas.width=viewport.width; canvas.height=viewport.height;
       const ctx=canvas.getContext('2d'); await page.render({canvasContext:ctx, viewport}).promise;
       const data=canvas.toDataURL('image/png');
-      const pg={ id:id(), name:`${file.name.replace(/\.[^.]+$/,'')} · p${i}`, kind:'pdf', pdfPage:i, blobUrl=data, pins:[], measurements:[], updatedAt:Date.now() };
+      const pg={ id:id(), name:`${file.name.replace(/\.[^.]+$/,'')} · p${i}`, kind:'pdf', pdfPage:i, blobUrl:data, pins:[], measurements:[], updatedAt:Date.now() };
       project.pages.push(pg);
     }
     if(!project._pageId && project.pages[0]) project._pageId=project.pages[0].id;
@@ -298,6 +311,12 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  function selectedPin(){
+    const idv=project._sel;
+    if(!idv) return null;
+    return findPin(idv);
+  }
+
   function updatePinDetails(){
     const p=selectedPin();
     selId.textContent=p? p.id : 'None';
@@ -319,12 +338,6 @@ document.addEventListener('DOMContentLoaded', () => {
       list.push('Recommended BOH for ELECTRICAL/DATA rooms.');
     }
     list.forEach(s=>{ const t=document.createElement('span'); t.className='tag warn'; t.textContent=s; warnsEl.appendChild(t); });
-  }
-
-  function selectedPin(){
-    const idv=project._sel;
-    if(!idv) return null;
-    return findPin(idv);
   }
 
   function selectPin(idv){
@@ -477,10 +490,259 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function exportXLSX(){
+    if (!window.XLSX) { alert('XLSX library not loaded'); return; }
     const rows = toRows(); const wb = XLSX.utils.book_new();
     const info=[[ 'Project', project.name ], [ 'Exported', new Date().toLocaleString() ], [ 'Total Signs', rows.length ], [ 'Total Pages', project.pages.length ]];
     const counts = {}; rows.forEach(r=> counts[r.sign_type]=(counts[r.sign_type]||0)+1 );
     info.push([]); info.push(['Breakdown']); Object.entries(counts).forEach(([k,v])=> info.push([k,v]));
     const wsInfo = XLSX.utils.aoa_to_sheet(info);
     const ws = XLSX.utils.json_to_sheet(rows, {header: Object.keys(rows[0]||{})});
-    XLSX.utils.book_append_sheet(wb, wsInfo, 'Project Info'); XLSX.utils.book_append_sheet(w
+    XLSX.utils.book_append_sheet(wb, wsInfo, 'Project Info');
+    XLSX.utils.book_append_sheet(wb, ws, 'Signage');
+    const out = XLSX.write(wb, {bookType:'xlsx', type:'array'});
+    downloadFile(project.name.replace(/\W+/g,'_')+'_signage.xlsx', new Blob([out], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+  }
+
+  async function exportZIP(){
+    if (!window.JSZip) { alert('JSZip library not loaded'); return; }
+    const rows=toRows(); const zip=new JSZip();
+    zip.file('signage.csv', [Object.keys(rows[0]||{}).join(','), ...rows.map(r=>Object.values(r).map(v=>csvEscape(v)).join(','))].join('\n'));
+    // photos
+    project.pages.forEach(pg=> (pg.pins||[]).forEach(pin=> (pin.photos||[]).forEach((ph, idx)=>{
+      const folder=zip.folder(`photos/${pin.id}`);
+      folder.file(ph.name||`photo_${idx+1}.png`, dataURLtoArrayBuffer(ph.dataUrl));
+    })));
+    const blob = await zip.generateAsync({type:'blob'});
+    downloadFile(project.name.replace(/\W+/g,'_')+'_export.zip', blob);
+  }
+
+  function importCSV(text){
+    const lines = text.split(/\r?\n/).filter(Boolean);
+    if(lines.length<2) return;
+    const hdr=lines[0].split(',').map(h=>h.trim()); commit();
+    for(let i=1;i<lines.length;i++){
+      const cells = parseCsvLine(lines[i]); const row={}; hdr.forEach((h,idx)=> row[h]=cells[idx]||'');
+      const p = makePin(parseFloat(row.x_pct)||50, parseFloat(row.y_pct)||50);
+      p.sign_type=row.sign_type||''; p.room_number=row.room_number||''; p.room_name=row.room_name||''; p.building=row.building||''; p.level=row.level||''; p.notes=row.notes||'';
+      if(row.lat && row.lon) p.gps={lat:+row.lat, lon:+row.lon};
+      currentPage().pins.push(p);
+    }
+    saveProject(project); renderPins(); renderPinsList(); alert('Imported rows into current page.');
+  }
+
+  /*********
+   * OCR   *
+   *********/
+  async function ocrCurrentView(){
+    if (!window.Tesseract) { alert('Tesseract.js not loaded'); return; }
+    const canvas = document.createElement('canvas');
+    const img=stageImage; if(!img || !img.src){ alert('No page image.'); return; }
+    const w=img.naturalWidth||img.width, h=img.naturalHeight||img.height; canvas.width=w; canvas.height=h; const ctx=canvas.getContext('2d'); ctx.drawImage(img,0,0);
+    const { data: { text } } = await Tesseract.recognize(canvas, 'eng');
+    let out = (text||'').trim(); if(!out){ alert('No text recognized.'); return; }
+    const head = out.slice(0,200);
+    try { await navigator.clipboard.writeText(out); } catch{}
+    inputSearch.value=head; renderPinsList(); alert('OCR done. First 200 chars placed in search. Full text copied to clipboard.');
+  }
+
+  /**********************
+   * Toolbar & bindings *
+   **********************/
+  on($('btnNew'),'click',()=>{
+    const name=prompt('New project name?','New Project'); if(!name) return;
+    commit(); const p=newProject(name); saveProject(p); selectProject(p.id);
+  });
+
+  on($('btnOpen'),'click',()=>{
+    const items = projects.map(p=>`• ${p.name} (${new Date(p.updatedAt).toLocaleString()}) [${p.id}]`).join('\n');
+    const id = prompt('Projects:\n'+items+'\n\nEnter project id to open:');
+    const found = projects.find(p=>p.id===id);
+    if(found){ selectProject(found.id); } else alert('Not found');
+  });
+
+  on($('btnSaveAs'),'click',()=>{
+    const name=prompt('Duplicate as name:', (project?.name||'Project')+' (copy)'); if(!name) return;
+    commit(); const copy=JSON.parse(JSON.stringify(project));
+    copy.id=id(); copy.name=name; copy.createdAt=Date.now(); copy.updatedAt=Date.now();
+    saveProject(copy); selectProject(copy.id);
+  });
+
+  on($('btnRename'),'click',()=>{
+    const name=prompt('Rename project:', project.name); if(!name) return;
+    commit(); project.name=name; saveProject(project); renderProjectLabel();
+  });
+
+  on($('btnUpload'),'click',()=> inputUpload.click());
+  on(inputUpload,'change', async (e)=>{
+    const files=[...e.target.files]; if(!files.length) return; commit();
+    for(const f of files){
+      if(f.type==='application/pdf'){ await addPdfPages(f); }
+      else if(f.type.startsWith('image/')){ const url=URL.createObjectURL(f); const name=f.name.replace(/\.[^.]+$/,''); addImagePage(url,name); }
+    }
+    renderAll();
+  });
+
+  on($('btnExportCSV'),'click',()=> exportCSV());
+  on($('btnExportXLSX'),'click',()=> exportXLSX());
+  on($('btnExportZIP'),'click',()=> exportZIP());
+
+  on($('btnImportCSV'),'click',()=> $('inputImportCSV').click());
+  on($('inputImportCSV'),'change', async (e)=>{
+    const f=e.target.files?.[0]; if(!f) return; const text=await f.text(); importCSV(text);
+  });
+
+  on($('btnOCR'),'click',()=> ocrCurrentView());
+
+  const btnCalibrate = $('btnCalibrate');
+  const btnMeasureToggle = $('btnMeasureToggle');
+  const btnMeasureReset = $('btnMeasureReset');
+
+  on(btnCalibrate,'click',()=> startCalibration('main'));
+  on(btnMeasureToggle,'click',()=> toggleMeasuring('main'));
+  on(btnMeasureReset,'click',()=> resetMeasurements('main'));
+
+  on($('btnUndo'),'click',()=> undo());
+  on($('btnRedo'),'click',()=> redo());
+
+  on($('btnClearPins'),'click',()=>{ if(!confirm('Clear ALL pins on this page?')) return; commit(); currentPage().pins=[]; renderAll(); });
+  on($('btnAddPin'),'click',()=> startAddPin());
+
+  on(toggleStrict,'change',()=>{ project.settings.strictRules = !!toggleStrict.checked; saveProject(project); renderWarnings(); });
+  on(toggleField,'change',()=>{ project.settings.fieldMode = !!toggleField.checked; saveProject(project); renderPins(); });
+
+  on(inputBuilding,'input',()=>{ projectContext.building = inputBuilding.value; });
+  on(inputLevel,'input',()=>{ projectContext.level = inputLevel.value; });
+
+  on(inputSearch,'input',()=> renderPinsList());
+  on(filterType,'change',()=> renderPins());
+
+  // Right panel field syncing
+  [fieldType, fieldRoomNum, fieldRoomName, fieldBuilding, fieldLevel, fieldNotes].forEach(el=> on(el,'input',()=>{
+    const pin = selectedPin(); if(!pin) return; commit();
+    if(el===fieldType) pin.sign_type = el.value || '';
+    if(el===fieldRoomNum) pin.room_number = el.value || '';
+    if(el===fieldRoomName) pin.room_name = el.value || '';
+    if(el===fieldBuilding) pin.building = el.value || '';
+    if(el===fieldLevel) pin.level = el.value || '';
+    if(el===fieldNotes) pin.notes = el.value || '';
+    pin.lastEdited=Date.now(); saveProject(project); renderPins(); renderWarnings(); renderPinsList();
+  }));
+
+  // Photo add/open/duplicate/delete
+  on($('btnAddPhoto'),'click',()=> $('inputPhoto').click());
+  on($('inputPhoto'),'change', async (e)=>{
+    const pin = selectedPin(); if(!pin) return alert('Select a pin first.');
+    const files=[...e.target.files]; if(!files.length) return; commit();
+    for(const f of files){ const url=await fileToDataURL(f); pin.photos.push({name:f.name,dataUrl:url,measurements:[]}); }
+    pin.lastEdited=Date.now(); saveProject(project); renderPinsList(); alert('Photo(s) added.');
+  });
+
+  on($('btnOpenPhoto'),'click',()=> openPhotoModal());
+  on($('btnDuplicate'),'click',()=>{
+    const pin=selectedPin(); if(!pin) return; commit();
+    const p=JSON.parse(JSON.stringify(pin)); p.id=id(); p.x_pct+=2; p.y_pct+=2; p.lastEdited=Date.now();
+    currentPage().pins.push(p); saveProject(project); renderPins(); renderPinsList(); selectPin(p.id);
+  });
+  on($('btnDelete'),'click',()=>{
+    const pin=selectedPin(); if(!pin) return;
+    if(!confirm('Delete selected pin?')) return; commit();
+    currentPage().pins=currentPage().pins.filter(x=>x.id!==pin.id);
+    saveProject(project); renderPins(); renderPinsList(); clearSelection();
+  });
+
+  /*********************
+   * Stage interactions *
+   *********************/
+  function startAddPin(){
+    addingPin=!addingPin;
+    $('btnAddPin').classList.toggle('ok', addingPin);
+  }
+
+  on(stage,'pointerdown',(e)=>{
+    if(e.target.classList.contains('pin')) return;
+    if(!addingPin) return;
+    const {x_pct,y_pct} = toPctCoords(e);
+    commit();
+    const p = makePin(x_pct,y_pct);
+    // GPS attempt
+    if(navigator.geolocation){
+      try { navigator.geolocation.getCurrentPosition(pos=>{
+        p.gps={lat:+pos.coords.latitude.toFixed(6), lon:+pos.coords.longitude.toFixed(6)};
+        saveProject(project);
+        if(selectedPin()?.id===p.id) updatePinDetails();
+      }); } catch {}
+    }
+    currentPage().pins.push(p); saveProject(project); renderPins(); renderPinsList(); selectPin(p.id);
+    addingPin=false; $('btnAddPin').classList.remove('ok');
+  });
+
+  on(pinLayer,'pointerdown',(e)=>{
+    const el = e.target.closest('.pin'); if(!el) return;
+    const idv = el.dataset.id; selectPin(idv);
+    dragging = el; el.setPointerCapture?.(e.pointerId);
+  });
+  on(pinLayer,'pointermove',(e)=>{
+    if(!dragging) return; e.preventDefault();
+    const pin = findPin(dragging.dataset.id); if(!pin) return;
+    const {x_pct,y_pct} = toPctCoords(e);
+    dragging.style.left = x_pct+'%';
+    dragging.style.top = y_pct+'%';
+    posLabel.textContent = pctLabel(x_pct,y_pct);
+  });
+  on(pinLayer,'pointerup',(e)=>{
+    if(!dragging) return;
+    const pin = findPin(dragging.dataset.id);
+    if(pin){ commit(); const {x_pct,y_pct}=toPctCoords(e); pin.x_pct=x_pct; pin.y_pct=y_pct; pin.lastEdited=Date.now(); saveProject(project); renderPinsList(); }
+    dragging.releasePointerCapture?.(e.pointerId); dragging=null;
+  });
+
+  function clearSelection(){ project._sel=null; saveProject(project); updatePinDetails(); }
+
+  /**************
+   * Undo/Redo  *
+   **************/
+  function snapshot(){ return JSON.stringify(project); }
+  function loadSnapshot(s){
+    project=JSON.parse(s);
+    const i=projects.findIndex(p=>p.id===project.id);
+    if(i>=0) projects[i]=project; else projects.push(project);
+    localStorage.setItem('survey:projects', JSON.stringify(projects));
+    localStorage.setItem('survey:lastOpenProjectId', project.id);
+  }
+  function commit(){ UNDO.push(snapshot()); if(UNDO.length>MAX_UNDO) UNDO.shift(); REDO.length=0; }
+  function undo(){ if(!UNDO.length) return; REDO.push(snapshot()); const s=UNDO.pop(); loadSnapshot(s); renderAll(); }
+  function redo(){ if(!REDO.length) return; UNDO.push(snapshot()); const s=REDO.pop(); loadSnapshot(s); renderAll(); }
+
+  // Keyboard shortcuts
+  window.addEventListener('keydown',(e)=>{
+    if((e.ctrlKey||e.metaKey) && !e.shiftKey && e.key.toLowerCase()==='z'){ e.preventDefault(); undo(); }
+    if((e.ctrlKey||e.metaKey) && e.shiftKey && e.key.toLowerCase()==='z'){ e.preventDefault(); redo(); }
+    if(e.key==='Delete'){ const p=selectedPin(); if(p){ commit(); currentPage().pins=currentPage().pins.filter(x=>x.id!==p.id); saveProject(project); renderPins(); renderPinsList(); clearSelection(); } }
+    if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)){
+      const p=selectedPin(); if(!p) return; e.preventDefault(); commit();
+      const delta = project.settings.fieldMode? 0.5 : 0.2;
+      if(e.key==='ArrowUp') p.y_pct=Math.max(0,p.y_pct-delta);
+      if(e.key==='ArrowDown') p.y_pct=Math.min(100,p.y_pct+delta);
+      if(e.key==='ArrowLeft') p.x_pct=Math.max(0,p.x_pct-delta);
+      if(e.key==='ArrowRight') p.x_pct=Math.min(100,p.x_pct+delta);
+      p.lastEdited=Date.now(); saveProject(project); renderPins(); updatePinDetails();
+    }
+  });
+
+  /**********************
+   * Init & observers   *
+   **********************/
+  // load/init project state
+  projects = loadProjects();
+  currentProjectId = localStorage.getItem('survey:lastOpenProjectId') || null;
+  project = currentProjectId ? projects.find(p=>p.id===currentProjectId) : null;
+  if(!project){ project = newProject('Untitled Project'); saveProject(project); }
+  selectProject(project.id);
+
+  // keep measure overlay sized to stage
+  const ro=new ResizeObserver(()=>{
+    measureSvg.setAttribute('width', stage.clientWidth);
+    measureSvg.setAttribute('height', stage.clientHeight);
+  });
+  ro.observe(stage);
+});
