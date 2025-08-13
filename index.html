@@ -5,86 +5,94 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Signage Survey</title>
 
-  <!-- Favicon -->
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' ry='10' fill='%23131a33'/%3E%3Cpath d='M12 44 L28 20 L40 36 L52 24' stroke='%234cc9f0' stroke-width='6' fill='none'/%3E%3Ccircle cx='28' cy='20' r='3' fill='%23a3e635'/%3E%3Ccircle cx='40' cy='36' r='3' fill='%23a3e635'/%3E%3Ccircle cx='52' cy='24' r='3' fill='%23a3e635'/%3E%3C/svg%3E" />
 
   <style>
     :root{
-      --bg:#0b1020;--panel:#11162a;--text:#e6e9f5;--muted:#aab0c6;--accent:#4cc9f0;--ok:#22c55e;--warn:#f59e0b;--err:#ef4444;
+      --bg:#0b1020;--panel:#11162a;--soft:#1a2240;--text:#e6e9f5;--muted:#aab0c6;--accent:#4cc9f0;--ok:#22c55e;--warn:#f59e0b;--err:#ef4444;
     }
     html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
-    .app{display:grid;grid-template-rows:auto 1fr;height:100%}
+    .app{display:grid;grid-template-rows:auto 1fr; height:100%}
     .toolbar{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;padding:.6rem .8rem;background:linear-gradient(180deg,#111936,#0d142d);border-bottom:1px solid #263056;position:sticky;top:0;z-index:5}
     .toolbar .group{display:flex;gap:.4rem;align-items:center;background:#0f1731;border:1px solid #263056;border-radius:10px;padding:.35rem .45rem}
     button{background:#1b2242;border:1px solid #2c3766;color:var(--text);padding:.45rem .6rem;border-radius:8px;cursor:pointer}
     button:hover{background:#232d57}
-    input,select{background:#0e1631;border:1px solid #2a355f;color:var(--text);padding:.45rem .55rem;border-radius:8px}
-    .pill{display:inline-flex;gap:.35rem;align-items:center;padding:.25rem .5rem;border-radius:999px;border:1px solid #27335f;background:#0e1634;color:#c5d0ff;font-size:.8rem}
-    .layout{display:grid;grid-template-columns:220px 1fr 320px;gap:.75rem;padding:.75rem;height:100%;box-sizing:border-box}
-    .panel{background:#11162a;border:1px solid #23305b;border-radius:14px;overflow:hidden;display:flex;flex-direction:column;min-height:0}
+    input, select{background:#0e1631;border:1px solid #2a355f;color:var(--text);padding:.45rem .55rem;border-radius:8px}
+    .layout{display:grid;grid-template-columns:220px 1fr 320px; gap:.75rem; padding:.75rem; height:100%; box-sizing:border-box}
+    .panel{background:var(--panel); border:1px solid #23305b; border-radius:14px; overflow:hidden; display:flex;flex-direction:column; min-height:0}
     .panel h3{margin:0;padding:.6rem .75rem;border-bottom:1px solid #23305b;background:#121938;font-size:.95rem;color:#c9d2ff}
     .thumbs{padding:.5rem;overflow:auto;display:grid;gap:.5rem}
     .thumb{background:#0f1733;border:1px solid #263056;border-radius:10px;padding:.35rem;cursor:pointer}
     .thumb.active{outline:2px solid var(--accent)}
     .thumb img{width:100%;height:110px;object-fit:cover;border-radius:6px;background:#060a18}
     .thumb input{width:100%;margin-top:.35rem;font-size:.8rem}
-    .stage{position:relative;background:#0a0f22;border-radius:14px;border:1px dashed #2b3562;display:flex;align-items:center;justify-content:center;overflow:hidden}
-    .stage-inner{position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center}
-    #stageImage{max-width:100%;max-height:100%;display:block}
-    #pinLayer{position:absolute;inset:0;pointer-events:none}
-    .pin{position:absolute;transform:translate(-50%,-100%);padding:.18rem .35rem;font-size:.75rem;border-radius:999px;border:1px solid rgba(0,0,0,.35);color:#0b0f1d;font-weight:700;box-shadow:0 3px 10px rgba(0,0,0,.35);pointer-events:auto}
+    .stage{position:relative; background:#0a0f22; border-radius:14px; border:1px dashed #2b3562; display:flex; align-items:center; justify-content:center; overflow:hidden}
+    .stage-inner{position:relative; width:100%; height:100%; display:flex; align-items:center; justify-content:center}
+    #stageImage{max-width:100%; max-height:100%; display:block}
+    #pinLayer{position:absolute; inset:0; pointer-events:none}
+    .pin{position:absolute; transform:translate(-50%, -100%); padding:.18rem .35rem; font-size:.75rem; border-radius:999px; border:1px solid rgba(0,0,0,.35); color:#0b0f1d; font-weight:700; box-shadow:0 3px 10px rgba(0,0,0,.35); pointer-events:auto}
     .pin.selected{outline:2px solid #fff}
-    .measure{position:absolute;pointer-events:none}
+    .measure{position:absolute; pointer-events:none; inset:0}
     .measure line{stroke-width:3}
-    .measure text{fill:#fff;font-size:12px;paint-order:stroke;stroke:#000;stroke-width:3}
-    .right{padding:0;overflow:auto}
-    .section{padding:.6rem .75rem;border-bottom:1px solid #23305b}
-    .grid{display:grid;grid-template-columns:1fr 1fr;gap:.5rem}
-    .row{display:grid;grid-template-columns:110px 1fr;gap:.5rem;align-items:center;margin:.35rem 0}
-    .list{max-height:280px;overflow:auto;display:grid;gap:.35rem}
-    .list .item{display:grid;grid-template-columns:20px 1fr auto;align-items:center;gap:.5rem;padding:.35rem .45rem;border:1px solid #27335f;border-radius:10px;background:#0e1634}
+    .measure text{fill:#fff; font-size:12px; paint-order:stroke; stroke:#000; stroke-width:3}
+    .right{padding:0; overflow:auto}
+    .section{padding:.6rem .75rem; border-bottom:1px solid #23305b}
+    .grid{display:grid; grid-template-columns: 1fr 1fr; gap:.5rem}
+    .row{display:grid; grid-template-columns:110px 1fr; gap:.5rem; align-items:center; margin:.35rem 0}
+    .pill{display:inline-flex; gap:.35rem; align-items:center; padding:.25rem .5rem; border-radius:999px; border:1px solid #27335f; background:#0e1634; color:#c5d0ff; font-size:.8rem}
+    .list{max-height:280px; overflow:auto; display:grid; gap:.35rem}
+    .list .item{display:grid; grid-template-columns:20px 1fr auto; align-items:center; gap:.5rem; padding:.35rem .45rem; border:1px solid #27335f; border-radius:10px; background:#0e1634}
     .muted{color:var(--muted)}
+    .warn{color:var(--warn)}
+    .ok{color:var(--ok)}
     .footer-note{font-size:.8rem;color:#93a2d8;padding:.5rem .75rem}
-    .chips{display:flex;flex-wrap:wrap;gap:.35rem}
-    .tag{font-size:.75rem;padding:.15rem .45rem;border-radius:999px;background:#18224a;border:1px solid #2b3566}
     .hidden{display:none}
-    /* Modal */
-    .modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:50}
-    .modal .box{background:#0f1733;border:1px solid #2b3566;border-radius:14px;width:min(900px,95vw);height:min(80vh,95vh);display:flex;flex-direction:column}
-    .modal .box header{display:flex;justify-content:space-between;align-items:center;padding:.6rem .9rem;border-bottom:1px solid #2b3566}
-    .modal .box main{flex:1;display:grid;grid-template-columns:1fr 280px}
-    .modal .viewer{position:relative;background:#060a18;display:flex;align-items:center;justify-content:center}
-    .modal .viewer img{max-width:100%;max-height:100%}
-    .modal .side{border-left:1px solid #2b3566;padding:.6rem}
+
+    /* Modals */
+    .modal{position:fixed; inset:0; background:rgba(0,0,0,.6); display:none; align-items:center; justify-content:center; z-index:50}
+    .modal .box{background:#0f1733; border:1px solid #2b3566; border-radius:14px; width:min(900px,95vw); height:min(80vh,95vh); display:flex; flex-direction:column}
+    .modal .box header{display:flex; justify-content:space-between; align-items:center; padding:.6rem .9rem; border-bottom:1px solid #2b3566}
+    .modal .box main{flex:1; display:grid; grid-template-columns: 1fr 280px}
+    .modal .viewer{position:relative; background:#060a18; display:flex; align-items:center; justify-content:center}
+    .modal .viewer img{max-width:100%; max-height:100%}
+    .modal .side{border-left:1px solid #2b3566; padding:.6rem}
+
+    /* Project modal layout */
+    #projectList{padding:1rem; display:grid; gap:.5rem; overflow:auto}
+    .proj-row{display:grid; grid-template-columns:1fr auto auto auto; gap:.5rem; align-items:center; background:#0f1733; border:1px solid #2b3566; border-radius:10px; padding:.45rem .6rem}
   </style>
 
-  <!-- Libs -->
+  <!-- CDNs -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.1.0/tesseract.min.js"></script>
-  <script>if (window.pdfjsLib) { pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js'; }</script>
+  <script>
+    if (window['pdfjsLib']) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+    }
+  </script>
 </head>
 <body>
   <div class="app">
     <div class="toolbar">
       <div class="group">
-        <button id="btnNew">New Project</button>
-        <button id="btnOpen">Open Project</button>
+        <button id="btnNew">New</button>
+        <button id="btnOpenModal">Projects</button>
         <button id="btnSaveAs">Save As…</button>
-        <button id="btnRename">Rename Project</button>
+        <button id="btnRename">Rename</button>
       </div>
       <div class="group">
         <input type="file" id="inputUpload" accept="image/*,application/pdf" multiple class="hidden" />
         <button id="btnUpload">Upload Map / Plan</button>
-        <label class="pill">Building <input id="inputBuilding" style="width:120px" placeholder="A"></label>
-        <label class="pill">Level <input id="inputLevel" style="width:80px" placeholder="1"></label>
+        <label class="pill">Building <input id="inputBuilding" style="width:120px" placeholder="A"/></label>
+        <label class="pill">Level <input id="inputLevel" style="width:80px" placeholder="1"/></label>
       </div>
       <div class="group">
-        <button id="btnExportCSV">Export CSV</button>
-        <button id="btnExportXLSX">Export Excel</button>
-        <button id="btnExportZIP">Export ZIP (+photos)</button>
+        <button id="btnExportCSV">CSV</button>
+        <button id="btnExportXLSX">Excel</button>
+        <button id="btnExportZIP">ZIP + Photos</button>
         <input type="file" id="inputImportCSV" accept="text/csv" class="hidden" />
         <button id="btnImportCSV">Import CSV</button>
       </div>
@@ -99,27 +107,25 @@
         <button id="btnRedo">Redo</button>
       </div>
       <div class="group">
-        <input id="inputSearch" placeholder="Search…" style="width:180px">
+        <input id="inputSearch" placeholder="Search…" style="width:180px"/>
         <select id="filterType"><option value="">All Types</option></select>
-        <label class="pill"><input type="checkbox" id="toggleStrict"> Auto rules</label>
+        <label class="pill"><input type="checkbox" id="toggleStrict"> Auto-normalize</label>
         <label class="pill"><input type="checkbox" id="toggleField"> Field Mode</label>
       </div>
       <div class="group">
-        <button id="btnClearPins">Clear All Pins</button>
+        <button id="btnClearPins">Clear Pins</button>
         <button id="btnAddPin">Add Pin</button>
       </div>
       <div class="muted" id="projectLabel" style="margin-left:auto">—</div>
     </div>
 
     <div class="layout">
-      <!-- Left -->
       <div class="panel">
         <h3>Pages</h3>
         <div class="thumbs" id="thumbs"></div>
         <div class="footer-note">Click a page to switch. Rename under each thumbnail.</div>
       </div>
 
-      <!-- Stage -->
       <div class="panel stage" id="stage">
         <div class="stage-inner">
           <img id="stageImage" alt="No page yet" />
@@ -128,43 +134,37 @@
         </div>
       </div>
 
-      <!-- Right -->
       <div class="panel right">
         <h3>Sign Details</h3>
         <div class="section" id="pinDetails">
-          <div class="row"><div>Selected</div><div id="selId" class="muted">None</div></div>
+          <div class="row"><div>Selected:</div><div id="selId" class="muted">None</div></div>
           <div class="row"><div>Sign Type</div><select id="fieldType"></select></div>
-          <div class="row"><div>Room #</div><input id="fieldRoomNum"></div>
-          <div class="row"><div>Room Name</div><input id="fieldRoomName"></div>
-          <div class="row"><div>Building</div><input id="fieldBuilding"></div>
-          <div class="row"><div>Level</div><input id="fieldLevel"></div>
-          <div class="row"><div>Notes</div><input id="fieldNotes"></div>
+          <div class="row"><div>Room #</div><input id="fieldRoomNum"/></div>
+          <div class="row"><div>Room Name</div><input id="fieldRoomName"/></div>
+          <div class="row"><div>Building</div><input id="fieldBuilding"/></div>
+          <div class="row"><div>Level</div><input id="fieldLevel"/></div>
+          <div class="row"><div>Notes</div><input id="fieldNotes"/></div>
           <div class="row"><div>Position</div><div id="posLabel" class="muted">—</div></div>
-          <div class="row"><div>GPS</div><div id="gpsLabel" class="muted">—</div></div>
           <div class="grid">
             <button id="btnAddPhoto">Add Photo</button>
             <button id="btnOpenPhoto">Open Photo</button>
             <button id="btnDuplicate">Duplicate</button>
             <button id="btnDelete">Delete</button>
           </div>
-          <input type="file" class="hidden" id="inputPhoto" accept="image/*" capture="environment" multiple />
-          <div class="chips" id="warns"></div>
+          <input type="file" class="hidden" id="inputPhoto" accept="image/*" multiple />
+          <div class="footer-note">Double-click a pin to open photo viewer.</div>
+          <div class="section">
+            <div class="footer-note">Tips: Callbox/Evac/Hall Direct → “ELEV. LOBBY” name; Electrical/Data → prefer BOH.</div>
+          </div>
         </div>
 
         <h3>Pins</h3>
         <div class="section">
           <div class="grid" style="margin-bottom:.5rem">
-            <button id="btnBulkType">Bulk: Set Type</button>
-            <button id="btnBulkBL">Bulk: Set Bldg/Level</button>
+            <button id="btnBulkType">Bulk: Type</button>
+            <button id="btnBulkBL">Bulk: Bldg/Level</button>
           </div>
           <div class="list" id="pinList"></div>
-        </div>
-
-        <h3>Tips</h3>
-        <div class="section">
-          <div>• Callbox / Evac / Hall Direct → room name usually “ELEV. LOBBY”.</div>
-          <div>• “ELECTRICAL” or “DATA” rooms → recommend BOH.</div>
-          <div>• Exits allowed on any level.</div>
         </div>
       </div>
     </div>
@@ -184,7 +184,7 @@
       <main>
         <div class="viewer">
           <img id="photoImg"/>
-          <svg id="photoMeasureSvg" class="measure" width="100%" height="100%" style="position:absolute; inset:0"></svg>
+          <svg id="photoMeasureSvg" class="measure" width="100%" height="100%"></svg>
         </div>
         <div class="side">
           <div class="row"><div>Pin</div><div id="photoPinId" class="muted">—</div></div>
@@ -202,24 +202,20 @@
     </div>
   </div>
 
-  <!-- Projects Modal -->
-  <div class="modal" id="projectsModal">
-    <div class="box" style="width:min(700px,95vw);height:min(70vh,95vh);">
+  <!-- Project Modal -->
+  <div class="modal" id="projectModal">
+    <div class="box" style="height:min(70vh,95vh); width:min(700px,95vw)">
       <header>
         <strong>Projects</strong>
-        <div style="display:flex;gap:.5rem">
-          <button id="btnProjectsNew">New</button>
-          <button id="btnProjectsClose">Close</button>
+        <div style="display:flex; gap:.5rem">
+          <button id="btnCreateProject">New Project</button>
+          <button id="btnCloseProjects">Close</button>
         </div>
       </header>
-      <main style="display:block;overflow:auto">
-        <div id="projectsList" class="section" style="display:grid;gap:.5rem;padding:.75rem"></div>
-        <div class="footer-note">Click a project name to open it. Use actions to rename, duplicate, or delete.</div>
-      </main>
+      <div id="projectList"></div>
     </div>
   </div>
 
-  <!-- App -->
   <script src="app.js"></script>
 </body>
 </html>
