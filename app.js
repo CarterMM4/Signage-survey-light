@@ -3,7 +3,7 @@ document.addEventListener('DOMContentLoaded', () => {
   /***********************
    * Helpers & constants *
    ***********************/
-  const $ = (id) => document.getElementById(id);
+  const $  = (id) => document.getElementById(id);
   const on = (el, evt, fn) => el && el.addEventListener(evt, fn);
 
   const SIGN_TYPES = {
@@ -21,12 +21,16 @@ document.addEventListener('DOMContentLoaded', () => {
   /***********************
    * Grab DOM references *
    ***********************/
+  // Left column
   const thumbsEl = $('thumbs');
+
+  // Stage
   const stage = $('stage');
   const stageImage = $('stageImage');
   const pinLayer = $('pinLayer');
   const measureSvg = $('measureSvg');
 
+  // Toolbar bits
   const projectLabel = $('projectLabel');
   const inputUpload = $('inputUpload');
   const inputBuilding = $('inputBuilding');
@@ -36,6 +40,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const toggleStrict = $('toggleStrict');
   const toggleField = $('toggleField');
 
+  // Right panel — fields
   const fieldType = $('fieldType');
   const fieldRoomNum = $('fieldRoomNum');
   const fieldRoomName = $('fieldRoomName');
@@ -44,7 +49,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const fieldNotes = $('fieldNotes');
   const selId = $('selId');
   const posLabel = $('posLabel');
-  const gpsLabel = $('gpsLabel');
+  const gpsLabel = $('gpsLabel'); // stays in UI; we just never set GPS anymore
   const warnsEl = $('warns');
   const pinList = $('pinList');
 
@@ -55,10 +60,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const photoPinId = $('photoPinId');
   const photoName = $('photoName');
   const photoMeaCount = $('photoMeaCount');
-
-  // Projects modal
-  const projectsModal = $('projectsModal');
-  const projectsList  = $('projectsList');
 
   /************************
    * App state / Undo/redo *
@@ -71,9 +72,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const REDO = [];
   const MAX_UNDO = 50;
 
+  // Ephemeral context (for default building/level when adding)
   const projectContext = { building:'', level:'' };
 
-  // Stage interactions
+  // Stage interaction state
   let addingPin = false;
   let dragging = null;
   let measureMode = false;
@@ -82,7 +84,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let fieldMode = false;
   let calibAwait = null; // 'main' | 'photo'
 
-  // Photo state
+  // Photo modal state
   const photoState = { pin:null, idx:0, measure:false, calib:null };
   let photoMeasureFirst = null;
 
@@ -90,7 +92,7 @@ document.addEventListener('DOMContentLoaded', () => {
    * Small utilities *
    *******************/
   function id(){ return Math.random().toString(36).slice(2,10); }
-  function fix(n){ return typeof n==='number'? +Number(n||0).toFixed(3):''; }
+  function fix(n){ return typeof n==='number'? +Number(n||0).toFixed(3):'' }
   function pctLabel(x,y){ return `${(x||0).toFixed(2)}%, ${(y||0).toFixed(2)}%`; }
   function dist(a,b){ const dx=a.x-b.x, dy=a.y-b.y; return Math.sqrt(dx*dx+dy*dy); }
 
@@ -100,8 +102,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const y=Math.min(Math.max(0,e.clientY-rect.top),rect.height);
     return { x_pct: +(x/rect.width*100).toFixed(3), y_pct:+(y/rect.height*100).toFixed(3) };
   }
-  function toLocal(e){ const r=stageImage.getBoundingClientRect(); return { x:e.clientX-r.left, y:e.clientY-r.top }; }
-  function toScreen(pt){ const r=stageImage.getBoundingClientRect(); return { x:r.left+pt.x, y:r.top+pt.y }; }
+  // IMPORTANT: use STAGE rect so points & SVG share same space
+  function toLocal(e){
+    const r=stage.getBoundingClientRect();
+    return { x:e.clientX-r.left, y:e.clientY-r.top };
+  }
 
   function csvEscape(v){ const s=(v==null? '': String(v)); if(/["\n,]/.test(s)) return '"'+s.replace(/"/g,'""')+'"'; return s; }
   function parseCsvLine(line){
@@ -161,10 +166,8 @@ document.addEventListener('DOMContentLoaded', () => {
   function checkedPinIds(){ return [...pinList.querySelectorAll('input[type="checkbox"]:checked')].map(cb=>cb.dataset.id); }
 
   function selectProject(pid){
-    projects = loadProjects(); // refresh
-    const found = projects.find(p=>p.id===pid);
-    if(!found){ alert('Project not found.'); return; }
-    project = found;
+    project = projects.find(p=>p.id===pid);
+    if(!project) return;
     localStorage.setItem('survey:lastOpenProjectId', pid);
     renderAll();
   }
@@ -177,11 +180,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   function loadProjects(){
     try{ return JSON.parse(localStorage.getItem('survey:projects')||'[]'); }catch{ return []; }
-  }
-  function deleteProject(pid){
-    const arr = loadProjects().filter(p => p.id !== pid);
-    localStorage.setItem('survey:projects', JSON.stringify(arr));
-    projects = arr;
   }
 
   function addImagePage(url, name){
@@ -199,7 +197,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const canvas=document.createElement('canvas'); canvas.width=viewport.width; canvas.height=viewport.height;
       const ctx=canvas.getContext('2d'); await page.render({canvasContext:ctx, viewport}).promise;
       const data=canvas.toDataURL('image/png');
-      const pg={ id:id(), name:`${file.name.replace(/\.[^.]+$/,'')} · p${i}`, kind:'pdf', pdfPage:i, blobUrl:data, pins:[], measurements:[], updatedAt:Date.now() };
+      const pg={ id:id(), name:`${file.name.replace(/\.[^.]+$/,'')} · p${i}`, kind:'pdf', pdfPage:i, blobUrl=data, pins:[], measurements:[], updatedAt:Date.now() };
       project.pages.push(pg);
     }
     if(!project._pageId && project.pages[0]) project._pageId=project.pages[0].id;
@@ -207,7 +205,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   /****************
-   * Rendering    *
+   * Render funcs *
    ****************/
   function renderAll(){
     renderTypeOptionsOnce();
@@ -314,7 +312,7 @@ document.addEventListener('DOMContentLoaded', () => {
     selId.textContent=p? p.id : 'None';
     fieldType.value=p?.sign_type||''; fieldRoomNum.value=p?.room_number||''; fieldRoomName.value=p?.room_name||''; fieldBuilding.value=p?.building||''; fieldLevel.value=p?.level||''; fieldNotes.value=p?.notes||'';
     posLabel.textContent=p? pctLabel(p.x_pct,p.y_pct) : '—';
-    gpsLabel.textContent=(p&&p.gps)? `${p.gps.lat}, ${p.gps.lon}` : '—';
+    gpsLabel.textContent='—'; // No GPS captured
     renderWarnings();
   }
 
@@ -332,19 +330,8 @@ document.addEventListener('DOMContentLoaded', () => {
     list.forEach(s=>{ const t=document.createElement('span'); t.className='tag warn'; t.textContent=s; warnsEl.appendChild(t); });
   }
 
-  function selectPin(idv){
-    project._sel=idv; saveProject(project); renderPins();
-    const el=[...pinLayer.children].find(x=>x.dataset.id===idv);
-    if(el){ el.scrollIntoView({block:'center', inline:'center', behavior:'smooth'}); }
-    const p=findPin(idv);
-    if(p){
-      const pgId=project.pages.find(pg=>pg.pins.includes(p))?.id;
-      if(pgId && project._pageId!==pgId){ project._pageId=pgId; saveProject(project); renderStage(); renderPins(); drawMeasurements(); }
-    }
-  }
-
   /***********************
-   * Measurement (main)  *
+   * Measuring (main view)
    ***********************/
   function startCalibration(scope){
     calibFirst=null; measureFirst=null;
@@ -358,11 +345,47 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   function resetMeasurements(scope){
     if(scope==='main'){
-      currentPage().measurements=[];
+      const pg=currentPage(); if(!pg) return;
+      pg.measurements=[];
       drawMeasurements();
-    } else {
-      if(photoState.photo){ photoState.photo.measurements=[]; drawPhotoMeasurements(); }
+    }else{
+      const ph=photoState.pin?.photos[photoState.idx];
+      if(ph){ ph.measurements=[]; drawPhotoMeasurements(); }
     }
+  }
+
+  function drawMeasurements(){
+    const page=currentPage();
+    while(measureSvg.firstChild) measureSvg.removeChild(measureSvg.firstChild);
+    if(!page||!page.measurements) return;
+
+    page.measurements.forEach(m=>{
+      // Points are STAGE-local pixels
+      const a = m.points[0];
+      const b = m.points[1];
+
+      const dx = Math.abs(a.x - b.x);
+      const dy = Math.abs(a.y - b.y);
+      const color = (dx > dy) ? '#ef4444' : (dy > dx) ? '#3b82f6' : '#f59e0b';
+
+      const line=document.createElementNS('http://www.w3.org/2000/svg','line');
+      line.setAttribute('x1',a.x); line.setAttribute('y1',a.y);
+      line.setAttribute('x2',b.x); line.setAttribute('y2',b.y);
+      line.setAttribute('stroke',color);
+      measureSvg.appendChild(line);
+
+      const midx=(a.x+b.x)/2, midy=(a.y+b.y)/2;
+      const text=document.createElementNS('http://www.w3.org/2000/svg','text');
+      const ft = m.feet
+        ? m.feet.toFixed(2)+' ft'
+        : (currentPage().scalePxPerFt
+            ? (dist(a,b)/currentPage().scalePxPerFt).toFixed(2)+' ft'
+            : dist(a,b).toFixed(0)+' px');
+      text.setAttribute('x',midx);
+      text.setAttribute('y',midy-6);
+      text.textContent=ft;
+      measureSvg.appendChild(text);
+    });
   }
 
   on(stage,'click',(e)=>{
@@ -384,25 +407,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  function drawMeasurements(){
-    const page=currentPage();
-    while(measureSvg.firstChild) measureSvg.removeChild(measureSvg.firstChild);
-    if(!page||!page.measurements) return;
-    page.measurements.forEach(m=>{
-      const a=toScreen(m.points[0]); const b=toScreen(m.points[1]);
-      const dx=Math.abs(a.x-b.x), dy=Math.abs(a.y-b.y);
-      const color = (dx>dy)? '#ef4444' : (dy>dx)? '#3b82f6' : '#f59e0b';
-      const line=document.createElementNS('http://www.w3.org/2000/svg','line');
-      line.setAttribute('x1',a.x); line.setAttribute('y1',a.y); line.setAttribute('x2',b.x); line.setAttribute('y2',b.y); line.setAttribute('stroke',color); measureSvg.appendChild(line);
-      const midx=(a.x+b.x)/2, midy=(a.y+b.y)/2; const text=document.createElementNS('http://www.w3.org/2000/svg','text');
-      const ft = m.feet ? m.feet.toFixed(2)+' ft' : ((currentPage().scalePxPerFt)? (dist(a,b)/currentPage().scalePxPerFt).toFixed(2)+' ft' : (dist(a,b).toFixed(0)+' px'));
-      text.setAttribute('x',midx); text.setAttribute('y',midy-6); text.textContent=ft; measureSvg.appendChild(text);
-    });
-  }
-
-  /***********************
-   * Photo modal measure *
-   ***********************/
+  /*************************
+   * Photo modal & measure *
+   *************************/
   function openPhotoModal(){
     const p=selectedPin(); if(!p) return alert('Select a pin first.');
     if(!p.photos.length) return alert('No photos attached.');
@@ -418,15 +425,39 @@ document.addEventListener('DOMContentLoaded', () => {
   function drawPhotoMeasurements(){
     while(photoMeasureSvg.firstChild) photoMeasureSvg.removeChild(photoMeasureSvg.firstChild);
     const ph=photoState.pin?.photos[photoState.idx]; if(!ph||!ph.measurements) return;
+
+    // compute offset of the centered image inside the SVG overlay
+    const vr = photoMeasureSvg.getBoundingClientRect();
+    const ir = photoImg.getBoundingClientRect();
+    const offsetX = ir.left - vr.left;
+    const offsetY = ir.top  - vr.top;
+
     ph.measurements.forEach(m=>{
-      const a=m.points[0], b=m.points[1];
+      // stored points are image-local; shift by offset to draw in SVG coords
+      const aImg=m.points[0], bImg=m.points[1];
+      const a={x:aImg.x+offsetX, y:aImg.y+offsetY};
+      const b={x:bImg.x+offsetX, y:bImg.y+offsetY};
+
       const dx=Math.abs(a.x-b.x), dy=Math.abs(a.y-b.y);
       const color=(dx>dy)? '#ef4444' : (dy>dx)? '#3b82f6' : '#f59e0b';
+
       const line=document.createElementNS('http://www.w3.org/2000/svg','line');
-      line.setAttribute('x1',a.x); line.setAttribute('y1',a.y); line.setAttribute('x2',b.x); line.setAttribute('y2',b.y); line.setAttribute('stroke',color); photoMeasureSvg.appendChild(line);
-      const midx=(a.x+b.x)/2, midy=(a.y+b.y)/2; const text=document.createElementNS('http://www.w3.org/2000/svg','text');
-      const ft = m.feet ? m.feet.toFixed(2)+' ft' : (ph.scalePxPerFt? (dist(a,b)/ph.scalePxPerFt).toFixed(2)+' ft' : (dist(a,b).toFixed(0)+' px'));
-      text.setAttribute('x',midx); text.setAttribute('y',midy-6); text.textContent=ft; photoMeasureSvg.appendChild(text);
+      line.setAttribute('x1',a.x); line.setAttribute('y1',a.y);
+      line.setAttribute('x2',b.x); line.setAttribute('y2',b.y);
+      line.setAttribute('stroke',color);
+      photoMeasureSvg.appendChild(line);
+
+      const midx=(a.x+b.x)/2, midy=(a.y+b.y)/2;
+      const text=document.createElementNS('http://www.w3.org/2000/svg','text');
+      const ft = m.feet
+        ? m.feet.toFixed(2)+' ft'
+        : (ph.scalePxPerFt
+            ? (dist(aImg,bImg)/ph.scalePxPerFt).toFixed(2)+' ft'
+            : dist(aImg,bImg).toFixed(0)+' px');
+      text.setAttribute('x',midx);
+      text.setAttribute('y',midy-6);
+      text.textContent=ft;
+      photoMeasureSvg.appendChild(text);
     });
   }
 
@@ -438,10 +469,11 @@ document.addEventListener('DOMContentLoaded', () => {
   on($('btnPhotoDelete'),'click',()=>{ if(!photoState.pin) return; if(!confirm('Delete this photo?')) return; commit(); photoState.pin.photos.splice(photoState.idx,1); photoState.idx=Math.max(0,photoState.idx-1); saveProject(project); if(photoState.pin.photos.length===0){ closePhotoModal(); } else { showPhoto(); } });
   on($('btnPhotoDownload'),'click',()=>{ const ph=photoState.pin?.photos[photoState.idx]; if(!ph) return; downloadFile(ph.name, dataURLtoBlob(ph.dataUrl)); });
 
+  // Photo measure clicks
   on($('photoMeasureSvg'),'click',(e)=>{
     const ph = photoState.pin?.photos[photoState.idx]; if(!ph) return;
-    const rect = photoImg.getBoundingClientRect();
-    const pt = { x: e.clientX-rect.left, y:e.clientY-rect.top };
+    const ir = photoImg.getBoundingClientRect();
+    const pt = { x: e.clientX-ir.left, y:e.clientY-ir.top }; // image-local
     if(photoState.calib===null){ photoState.calib = pt; return; }
     if(photoState.calib && !photoState.measureTmp){
       const px = dist(photoState.calib, pt); const ft=parseFloat(prompt('Enter feet for calibration:','10'))||10;
@@ -451,7 +483,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   on(photoImg,'click',(e)=>{
     if(!photoState.measure) return; const ph=photoState.pin?.photos[photoState.idx]; if(!ph) return;
-    const rect = photoImg.getBoundingClientRect(); const pt={x:e.clientX-rect.left,y:e.clientY-rect.top};
+    const ir = photoImg.getBoundingClientRect(); const pt={x:e.clientX-ir.left,y:e.clientY-ir.top}; // image-local
     if(!photoMeasureFirst){ photoMeasureFirst=pt; return; }
     const m={id:id(), kind:'photo', points:[photoMeasureFirst, pt]};
     if(ph.scalePxPerFt){ m.feet=dist(photoMeasureFirst,pt)/ph.scalePxPerFt; }
@@ -466,7 +498,7 @@ document.addEventListener('DOMContentLoaded', () => {
     project.pages.forEach(pg=> (pg.pins||[]).forEach(p=> rows.push({
       id:p.id, sign_type:p.sign_type||'', room_number:p.room_number||'', room_name:p.room_name||'',
       building:p.building||'', level:p.level||'', x_pct:fix(p.x_pct), y_pct:fix(p.y_pct),
-      notes:p.notes||'', lat:p.gps?.lat||'', lon:p.gps?.lon||'', page_name:pg.name,
+      notes:p.notes||'', page_name:pg.name,
       last_edited: new Date(p.lastEdited||project.updatedAt).toISOString()
     })));
     rows.sort((a,b)=> (a.building||'').localeCompare(b.building||'')
@@ -496,6 +528,7 @@ document.addEventListener('DOMContentLoaded', () => {
   async function exportZIP(){
     const rows=toRows(); const zip=new JSZip();
     zip.file('signage.csv', [Object.keys(rows[0]||{}).join(','), ...rows.map(r=>Object.values(r).map(v=>csvEscape(v)).join(','))].join('\n'));
+    // photos
     project.pages.forEach(pg=> pg.pins.forEach(pin=> pin.photos?.forEach((ph, idx)=>{ const folder=zip.folder(`photos/${pin.id}`); folder.file(ph.name||`photo_${idx+1}.png`, dataURLtoArrayBuffer(ph.dataUrl)); })) );
     const blob = await zip.generateAsync({type:'blob'}); downloadFile(project.name.replace(/\W+/g,'_')+'_export.zip', blob);
   }
@@ -508,34 +541,34 @@ document.addEventListener('DOMContentLoaded', () => {
       const cells = parseCsvLine(lines[i]); const row={}; hdr.forEach((h,idx)=> row[h]=cells[idx]||'');
       const p = makePin(parseFloat(row.x_pct)||50, parseFloat(row.y_pct)||50);
       p.sign_type=row.sign_type||''; p.room_number=row.room_number||''; p.room_name=row.room_name||''; p.building=row.building||''; p.level=row.level||''; p.notes=row.notes||'';
-      if(row.lat && row.lon) p.gps={lat:+row.lat, lon:+row.lon};
       currentPage().pins.push(p);
     }
     saveProject(project); renderPins(); renderPinsList(); alert('Imported rows into current page.');
   }
 
   /****************
-   * Toolbar & UI *
+   * Project load *
    ****************/
-  // Create / open / save-as / rename
-  on($('btnNew'),'click',()=>{
-    const name=prompt('New project name?','New Project'); if(!name) return;
-    commit(); const p=newProject(name); saveProject(p); selectProject(p.id);
+  // Load / init project state
+  projects = loadProjects();
+  currentProjectId = localStorage.getItem('survey:lastOpenProjectId') || null;
+  project = currentProjectId ? projects.find(p=>p.id===currentProjectId) : null;
+  if(!project){ project = newProject('Untitled Project'); saveProject(project); }
+  selectProject(project.id);
+
+  /****************
+   * Toolbar wire *
+   ****************/
+  on($('btnNew'),'click',()=>{ const name=prompt('New project name?','New Project'); if(!name) return; commit(); const p=newProject(name); saveProject(p); selectProject(p.id); });
+  on($('btnOpen'),'click',()=>{
+    const items = projects.map(p=>`• ${p.name} (${new Date(p.updatedAt).toLocaleString()}) [${p.id}]`).join('\n');
+    const id = prompt('Projects:\n'+items+'\n\nEnter project id to open:');
+    const found = projects.find(p=>p.id===id);
+    if(found){ selectProject(found.id); } else alert('Not found');
   });
+  on($('btnSaveAs'),'click',()=>{ const name=prompt('Duplicate as name:', project.name+' (copy)'); if(!name) return; commit(); const copy=JSON.parse(JSON.stringify(project)); copy.id=id(); copy.name=name; copy.createdAt=Date.now(); copy.updatedAt=Date.now(); saveProject(copy); selectProject(copy.id); });
+  on($('btnRename'),'click',()=>{ const name=prompt('Rename project:', project.name); if(!name) return; commit(); project.name=name; saveProject(project); renderProjectLabel(); });
 
-  on($('btnOpen'),'click', openProjectsModal);
-
-  on($('btnSaveAs'),'click',()=>{
-    const name=prompt('Duplicate as name:', project.name+' (copy)'); if(!name) return;
-    commit(); const copy=JSON.parse(JSON.stringify(project)); copy.id=id(); copy.name=name; copy.createdAt=Date.now(); copy.updatedAt=Date.now(); saveProject(copy); selectProject(copy.id);
-  });
-
-  on($('btnRename'),'click',()=>{
-    const name=prompt('Rename project:', project.name); if(!name) return;
-    commit(); project.name=name; saveProject(project); renderProjectLabel();
-  });
-
-  // Upload
   on($('btnUpload'),'click',()=> inputUpload.click());
   on(inputUpload,'change', async (e)=>{
     const files=[...e.target.files]; if(!files.length) return; commit();
@@ -546,41 +579,26 @@ document.addEventListener('DOMContentLoaded', () => {
     renderAll();
   });
 
-  // Export/Import
   on($('btnExportCSV'),'click',()=> exportCSV());
   on($('btnExportXLSX'),'click',()=> exportXLSX());
   on($('btnExportZIP'),'click',()=> exportZIP());
+
   on($('btnImportCSV'),'click',()=> $('inputImportCSV').click());
   on($('inputImportCSV'),'change', async (e)=>{ const f=e.target.files?.[0]; if(!f) return; const text=await f.text(); importCSV(text); });
 
-  // OCR
-  on($('btnOCR'),'click',async ()=>{
-    const canvas = document.createElement('canvas');
-    const img=stageImage; if(!img || !img.src){ alert('No page image.'); return; }
-    const w=img.naturalWidth||img.width, h=img.naturalHeight||img.height; canvas.width=w; canvas.height=h; const ctx=canvas.getContext('2d'); ctx.drawImage(img,0,0);
-    const { data: { text } } = await Tesseract.recognize(canvas, 'eng');
-    const out=(text||'').trim(); if(!out){ alert('No text recognized.'); return; }
-    const head = out.slice(0,200);
-    try { await navigator.clipboard.writeText(out); } catch{}
-    inputSearch.value=head; renderPinsList(); alert('OCR done. First 200 chars placed in search. Full text copied to clipboard.');
-  });
+  on($('btnOCR'),'click',()=> ocrCurrentView());
 
-  // Measure controls
-  on($('btnCalibrate'),'click',()=> startCalibration('main'));
-  on($('btnMeasureToggle'),'click',()=> toggleMeasuring('main'));
-  on($('btnMeasureReset'),'click',()=> resetMeasurements('main'));
+  const btnCalibrate = $('btnCalibrate');
+  const btnMeasureToggle = $('btnMeasureToggle');
+  const btnMeasureReset = $('btnMeasureReset');
 
-  // Undo/Redo
-  function snapshot(){ return JSON.stringify(project); }
-  function loadSnapshot(s){ project=JSON.parse(s); const i=projects.findIndex(p=>p.id===project.id); if(i>=0) projects[i]=project; else projects.push(project); localStorage.setItem('survey:projects', JSON.stringify(projects)); localStorage.setItem('survey:lastOpenProjectId', project.id); }
-  function commit(){ UNDO.push(snapshot()); if(UNDO.length>MAX_UNDO) UNDO.shift(); REDO.length=0; }
-  function undo(){ if(!UNDO.length) return; REDO.push(snapshot()); const s=UNDO.pop(); loadSnapshot(s); renderAll(); }
-  function redo(){ if(!REDO.length) return; UNDO.push(snapshot()); const s=REDO.pop(); loadSnapshot(s); renderAll(); }
+  on(btnCalibrate,'click',()=> startCalibration('main'));
+  on(btnMeasureToggle,'click',()=> toggleMeasuring('main'));
+  on(btnMeasureReset,'click',()=> resetMeasurements('main'));
 
   on($('btnUndo'),'click',()=> undo());
   on($('btnRedo'),'click',()=> redo());
 
-  // Pins toolbar
   on($('btnClearPins'),'click',()=>{ if(!confirm('Clear ALL pins on this page?')) return; commit(); currentPage().pins=[]; renderAll(); });
   on($('btnAddPin'),'click',()=> startAddPin());
 
@@ -615,12 +633,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   on($('btnOpenPhoto'),'click',()=> openPhotoModal());
   on($('btnDuplicate'),'click',()=>{ const pin=selectedPin(); if(!pin) return; commit(); const p=JSON.parse(JSON.stringify(pin)); p.id=id(); p.x_pct+=2; p.y_pct+=2; p.lastEdited=Date.now(); currentPage().pins.push(p); saveProject(project); renderPins(); renderPinsList(); selectPin(p.id); });
-  on($('btnDelete'),'click',()=>{ const pin=selectedPin(); if(!pin) return; if(!confirm('Delete selected pin?')) return; commit(); currentPage().pins=currentPage().pins.filter(x=>x.id!==pin.id); saveProject(project); renderPins(); renderPinsList(); project._sel=null; updatePinDetails(); });
+  on($('btnDelete'),'click',()=>{ const pin=selectedPin(); if(!pin) return; if(!confirm('Delete selected pin?')) return; commit(); currentPage().pins=currentPage().pins.filter(x=>x.id!==pin.id); saveProject(project); renderPins(); renderPinsList(); clearSelection(); });
 
   on($('btnBulkType'),'click',()=>{ const type = prompt('Enter type for selected checkboxes (or empty to cancel):'); if(type==null) return; commit(); const ids = checkedPinIds(); ids.forEach(idv=>{ const p=findPin(idv); if(p){ p.sign_type=type; p.lastEdited=Date.now(); }}); saveProject(project); renderPins(); renderPinsList(); });
   on($('btnBulkBL'),'click',()=>{ const b = prompt('Building value (blank to keep):', inputBuilding.value||''); if(b==null) return; const l = prompt('Level value (blank to keep):', inputLevel.value||''); if(l==null) return; commit(); const ids = checkedPinIds(); ids.forEach(idv=>{ const p=findPin(idv); if(p){ if(b!=='') p.building=b; if(l!=='') p.level=l; p.lastEdited=Date.now(); }}); saveProject(project); renderPins(); renderPinsList(); });
 
-  // Stage interactions (add & drag)
+  /***********************
+   * Add Pin + Dragging  *
+   ***********************/
   function startAddPin(){ addingPin=!addingPin; $('btnAddPin').classList.toggle('ok', addingPin); }
 
   on($('stage'),'pointerdown',(e)=>{
@@ -629,14 +649,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const {x_pct,y_pct} = toPctCoords(e);
     commit();
     const p = makePin(x_pct,y_pct);
-    // GPS attempt (non-blocking)
-    if(navigator.geolocation){
-      try { navigator.geolocation.getCurrentPosition(pos=>{
-        p.gps={lat:+pos.coords.latitude.toFixed(6), lon:+pos.coords.longitude.toFixed(6)};
-        saveProject(project);
-        if(selectedPin()?.id===p.id) updatePinDetails();
-      }); } catch {}
-    }
     currentPage().pins.push(p); saveProject(project); renderPins(); renderPinsList(); selectPin(p.id);
     addingPin=false; $('btnAddPin').classList.remove('ok');
   });
@@ -661,7 +673,37 @@ document.addEventListener('DOMContentLoaded', () => {
     dragging.releasePointerCapture?.(e.pointerId); dragging=null;
   });
 
-  // Resize observer for measuring SVG
+  /****************
+   * OCR (optional)
+   ****************/
+  async function ocrCurrentView(){
+    const canvas = document.createElement('canvas');
+    const img=stageImage; if(!img || !img.src){ alert('No page image.'); return; }
+    const w=img.naturalWidth||img.width, h=img.naturalHeight||img.height; canvas.width=w; canvas.height=h; const ctx=canvas.getContext('2d'); ctx.drawImage(img,0,0);
+    const { data: { text } } = await Tesseract.recognize(canvas, 'eng');
+    let out = (text||'').trim(); if(!out){ alert('No text recognized.'); return; }
+    const head = out.slice(0,200);
+    try { await navigator.clipboard.writeText(out); } catch{}
+    inputSearch.value=head; renderPinsList(); alert('OCR done. First 200 chars placed in search. Full text copied to clipboard.');
+  }
+
+  /************
+   * Undo/Redo
+   ************/
+  function snapshot(){ return JSON.stringify(project); }
+  function loadSnapshot(s){
+    project=JSON.parse(s);
+    const i=projects.findIndex(p=>p.id===project.id);
+    if(i>=0) projects[i]=project; else projects.push(project);
+    localStorage.setItem('survey:projects', JSON.stringify(projects));
+    localStorage.setItem('survey:lastOpenProjectId', project.id);
+  }
+  function commit(){ UNDO.push(snapshot()); if(UNDO.length>MAX_UNDO) UNDO.shift(); REDO.length=0; }
+  function undo(){ if(!UNDO.length) return; REDO.push(snapshot()); const s=UNDO.pop(); loadSnapshot(s); renderAll(); }
+  function redo(){ if(!REDO.length) return; UNDO.push(snapshot()); const s=REDO.pop(); loadSnapshot(s); renderAll(); }
+
+  // Initial render & observers
+  renderAll();
   const ro=new ResizeObserver(()=>{ measureSvg.setAttribute('width', stage.clientWidth); measureSvg.setAttribute('height', stage.clientHeight); }); ro.observe(stage);
 
   // Keyboard shortcuts
@@ -679,120 +721,4 @@ document.addEventListener('DOMContentLoaded', () => {
       p.lastEdited=Date.now(); saveProject(project); renderPins(); updatePinDetails();
     }
   });
-
-  /*********************
-   * Projects picker   *
-   *********************/
-  function openProjectsModal() {
-    renderProjectsList();
-    projectsModal.style.display = 'flex';
-  }
-  function closeProjectsModal() {
-    projectsModal.style.display = 'none';
-  }
-  on($('btnProjectsClose'),'click', closeProjectsModal);
-  on($('btnProjectsNew'),'click', () => {
-    const name = prompt('New project name?', 'New Project');
-    if (!name) return;
-    const p = newProject(name);
-    saveProject(p);
-    selectProject(p.id);
-    renderProjectsList();
-  });
-
-  function renderProjectsList() {
-    projects = loadProjects();
-    projectsList.innerHTML = '';
-    if (!projects.length) {
-      const empty = document.createElement('div');
-      empty.className = 'footer-note';
-      empty.textContent = 'No projects yet. Click “New”.';
-      projectsList.appendChild(empty);
-      return;
-    }
-    projects.sort((a,b)=> (b.updatedAt||0)-(a.updatedAt||0)).forEach(p=>{
-      const row = document.createElement('div');
-      row.style.display='grid';
-      row.style.gridTemplateColumns='1fr auto';
-      row.style.alignItems='center';
-      row.style.gap='.5rem';
-      row.style.padding='.5rem';
-      row.style.border='1px solid #27335f';
-      row.style.borderRadius='10px';
-      row.style.background='#0e1634';
-
-      const left = document.createElement('div');
-      left.innerHTML = `<strong style="cursor:pointer">${p.name}</strong>
-        <span class="muted"> • updated ${new Date(p.updatedAt).toLocaleString()}</span>
-        <div class="muted" style="font-size:.8rem">${p.pages?.length||0} pages, ${
-          (p.pages||[]).reduce((a,pg)=>a+(pg.pins?.length||0),0)
-        } pins</div>`;
-      left.querySelector('strong').onclick = () => { selectProject(p.id); closeProjectsModal(); };
-      row.appendChild(left);
-
-      const actions = document.createElement('div');
-      actions.style.display='flex';
-      actions.style.gap='.35rem';
-
-      const openBtn = document.createElement('button');
-      openBtn.textContent='Open';
-      openBtn.onclick = () => { selectProject(p.id); closeProjectsModal(); };
-
-      const renameBtn = document.createElement('button');
-      renameBtn.textContent='Rename';
-      renameBtn.onclick = () => {
-        const name = prompt('Rename project:', p.name);
-        if (!name) return;
-        p.name = name; p.updatedAt = Date.now();
-        saveProject(p); renderProjectsList(); renderProjectLabel();
-      };
-
-      const dupBtn = document.createElement('button');
-      dupBtn.textContent='Duplicate';
-      dupBtn.onclick = () => {
-        const copy = JSON.parse(JSON.stringify(p));
-        copy.id = id();
-        copy.name = p.name + ' (copy)';
-        copy.createdAt = Date.now();
-        copy.updatedAt = Date.now();
-        saveProject(copy);
-        renderProjectsList();
-      };
-
-      const delBtn = document.createElement('button');
-      delBtn.textContent='Delete';
-      delBtn.onclick = () => {
-        if (!confirm(`Delete “${p.name}”? This cannot be undone.`)) return;
-        deleteProject(p.id);
-        if (project?.id === p.id) {
-          projects = loadProjects();
-          if (projects.length) {
-            selectProject(projects[0].id);
-          } else {
-            const np = newProject('Untitled Project');
-            saveProject(np);
-            selectProject(np.id);
-          }
-        } else {
-          renderProjectsList();
-        }
-      };
-
-      actions.append(openBtn, renameBtn, dupBtn, delBtn);
-      row.appendChild(actions);
-      projectsList.appendChild(row);
-    });
-  }
-
-  /****************
-   * Boot sequence *
-   ****************/
-  projects = loadProjects();
-  currentProjectId = localStorage.getItem('survey:lastOpenProjectId') || null;
-  project = currentProjectId ? projects.find(p=>p.id===currentProjectId) : null;
-  if(!project){
-    project = newProject('Untitled Project');
-    saveProject(project);
-  }
-  selectProject(project.id);
 });
