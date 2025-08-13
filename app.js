@@ -3,7 +3,7 @@ document.addEventListener('DOMContentLoaded', () => {
   /***********************
    * Helpers & constants *
    ***********************/
-  const $  = (id) => document.getElementById(id);
+  const $ = (id) => document.getElementById(id);
   const on = (el, evt, fn) => el && el.addEventListener(evt, fn);
 
   const SIGN_TYPES = {
@@ -49,8 +49,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const fieldNotes = $('fieldNotes');
   const selId = $('selId');
   const posLabel = $('posLabel');
-  const gpsLabel = $('gpsLabel'); // stays in UI; we just never set GPS anymore
-  const warnsEl = $('warns');
+  const warnsEl = $('warns'); // (kept for future tips area)
   const pinList = $('pinList');
 
   // Photo modal
@@ -61,23 +60,25 @@ document.addEventListener('DOMContentLoaded', () => {
   const photoName = $('photoName');
   const photoMeaCount = $('photoMeaCount');
 
+  // Project modal
+  const projectModal = $('projectModal');
+  const projectList = $('projectList');
+
   /************************
    * App state / Undo/redo *
    ************************/
   let projects = [];
-  let currentProjectId = null;
-  let project = null;
-
+  let project = null; // active
   const UNDO = [];
   const REDO = [];
   const MAX_UNDO = 50;
 
-  // Ephemeral context (for default building/level when adding)
+  // Ephemeral defaults for new pins
   const projectContext = { building:'', level:'' };
 
   // Stage interaction state
   let addingPin = false;
-  let dragging = null;
+  let dragEl = null;
   let measureMode = false;
   let calibFirst = null;
   let measureFirst = null;
@@ -92,7 +93,7 @@ document.addEventListener('DOMContentLoaded', () => {
    * Small utilities *
    *******************/
   function id(){ return Math.random().toString(36).slice(2,10); }
-  function fix(n){ return typeof n==='number'? +Number(n||0).toFixed(3):'' }
+  function fix(n){ return (typeof n==='number') ? +Number(n||0).toFixed(3) : ''; }
   function pctLabel(x,y){ return `${(x||0).toFixed(2)}%, ${(y||0).toFixed(2)}%`; }
   function dist(a,b){ const dx=a.x-b.x, dy=a.y-b.y; return Math.sqrt(dx*dx+dy*dy); }
 
@@ -102,21 +103,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const y=Math.min(Math.max(0,e.clientY-rect.top),rect.height);
     return { x_pct: +(x/rect.width*100).toFixed(3), y_pct:+(y/rect.height*100).toFixed(3) };
   }
-  // IMPORTANT: use STAGE rect so points & SVG share same space
-  function toLocal(e){
-    const r=stage.getBoundingClientRect();
-    return { x:e.clientX-r.left, y:e.clientY-r.top };
-  }
+  function toLocal(e){ const r=stageImage.getBoundingClientRect(); return { x:e.clientX-r.left, y:e.clientY-r.top }; }
+  function toScreen(pt){ const r=stageImage.getBoundingClientRect(); return { x:r.left+pt.x, y:r.top+pt.y }; }
 
-  function csvEscape(v){ const s=(v==null? '': String(v)); if(/["\n,]/.test(s)) return '"'+s.replace(/"/g,'""')+'"'; return s; }
+  function csvEscape(v){ const s=(v==null ? '' : String(v)); return /["\n,]/.test(s) ? '"' + s.replace(/"/g,'""') + '"' : s; }
   function parseCsvLine(line){
     const out=[]; let cur=''; let i=0; let inQ=false;
     while(i<line.length){
-      const ch=line[i++];
-      if(inQ){
+      const ch=line[i++]; if(inQ){
         if(ch==='"'){ if(line[i]==='"'){ cur+='"'; i++; } else { inQ=false; } }
         else { cur+=ch; }
-      }else{
+      } else {
         if(ch===','){ out.push(cur); cur=''; }
         else if(ch==='"'){ inQ=true; }
         else { cur+=ch; }
@@ -133,31 +130,32 @@ document.addEventListener('DOMContentLoaded', () => {
     for(let i=0;i<len;i++) buf[i]=bstr.charCodeAt(i); return buf;
   }
   function dataURLtoBlob(dataURL){
-    const arr=dataURL.split(',');
-    const match=(arr[0].match(/:(.*?);/)||[]);
-    const mime=match[1]||'image/png';
-    const ab=dataURLtoArrayBuffer(dataURL);
-    return new Blob([ab],{type:mime});
+    const arr=dataURL.split(','); const match=(arr[0].match(/:(.*?);/)||[]); const mime=match[1]||'image/png';
+    const ab=dataURLtoArrayBuffer(dataURL); return new Blob([ab],{type:mime});
   }
   function downloadText(name, text){ downloadFile(name, new Blob([text],{type:'text/plain'})); }
   function downloadFile(name, blob){
     const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name;
-    document.body.appendChild(a); a.click();
-    setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 1000);
   }
 
   /*********************
    * Data model helpers *
    *********************/
   function newProject(name){
-    return { id:id(), name, createdAt:Date.now(), updatedAt:Date.now(), pages:[], settings:{ colorsByType:SIGN_TYPES, fieldMode:false, strictRules:false } };
+    return { id:id(), name:name, createdAt:Date.now(), updatedAt:Date.now(), pages:[], settings:{ colorsByType:SIGN_TYPES, fieldMode:false, strictRules:false } };
   }
   function currentPage(){
-    if(!project._pageId && project.pages[0]) project._pageId=project.pages[0].id;
-    return project.pages.find(p=>p.id===project._pageId);
+    if(!project._pageId && project.pages[0]) project._pageId = project.pages[0].id;
+    return project.pages.find(p=>p.id===project._pageId) || null;
   }
   function makePin(x_pct,y_pct){
-    return { id:id(), sign_type:'', room_number:'', room_name:'', building: inputBuilding.value||projectContext.building||'', level: inputLevel.value||projectContext.level||'', x_pct, y_pct, notes:'', photos:[], lastEdited:Date.now() };
+    return {
+      id:id(), sign_type:'', room_number:'', room_name:'',
+      building: inputBuilding.value || projectContext.building || '',
+      level: inputLevel.value || projectContext.level || '',
+      x_pct:x_pct, y_pct:y_pct, notes:'', photos:[], lastEdited:Date.now()
+    };
   }
   function findPin(idv){
     for(const pg of project.pages){ const f=(pg.pins||[]).find(p=>p.id===idv); if(f) return f; }
@@ -166,24 +164,26 @@ document.addEventListener('DOMContentLoaded', () => {
   function checkedPinIds(){ return [...pinList.querySelectorAll('input[type="checkbox"]:checked')].map(cb=>cb.dataset.id); }
 
   function selectProject(pid){
-    project = projects.find(p=>p.id===pid);
-    if(!project) return;
+    const found = projects.find(p=>p.id===pid);
+    if(!found) return;
+    project = found;
     localStorage.setItem('survey:lastOpenProjectId', pid);
     renderAll();
   }
   function saveProject(p){
-    p.updatedAt=Date.now();
-    const i=projects.findIndex(x=>x.id===p.id);
+    p.updatedAt = Date.now();
+    const i = projects.findIndex(x=>x.id===p.id);
     if(i>=0) projects[i]=p; else projects.push(p);
     localStorage.setItem('survey:projects', JSON.stringify(projects));
-    projects = loadProjects();
+    projects = loadProjects(); // refresh from storage
+    renderProjectList(); // keep modal in sync
   }
   function loadProjects(){
     try{ return JSON.parse(localStorage.getItem('survey:projects')||'[]'); }catch{ return []; }
   }
 
   function addImagePage(url, name){
-    const pg={ id:id(), name:name||'Image', kind:'image', blobUrl:url, pins:[], measurements:[], updatedAt:Date.now() };
+    const pg={ id:id(), name:(name||'Image'), kind:'image', blobUrl:url, pins:[], measurements:[], updatedAt:Date.now() };
     project.pages.push(pg);
     if(!project._pageId) project._pageId=pg.id;
     saveProject(project);
@@ -194,10 +194,12 @@ document.addEventListener('DOMContentLoaded', () => {
     for(let i=1;i<=pdf.numPages;i++){
       const page=await pdf.getPage(i);
       const viewport=page.getViewport({scale:2});
-      const canvas=document.createElement('canvas'); canvas.width=viewport.width; canvas.height=viewport.height;
-      const ctx=canvas.getContext('2d'); await page.render({canvasContext:ctx, viewport}).promise;
+      const canvas=document.createElement('canvas');
+      canvas.width=viewport.width; canvas.height=viewport.height;
+      const ctx=canvas.getContext('2d');
+      await page.render({canvasContext:ctx, viewport:viewport}).promise;
       const data=canvas.toDataURL('image/png');
-      const pg={ id:id(), name:`${file.name.replace(/\.[^.]+$/,'')} · p${i}`, kind:'pdf', pdfPage:i, blobUrl=data, pins:[], measurements:[], updatedAt:Date.now() };
+      const pg={ id:id(), name:`${file.name.replace(/\.[^.]+$/,'')} · p${i}`, kind:'pdf', pdfPage:i, blobUrl:data, pins:[], measurements:[], updatedAt:Date.now() };
       project.pages.push(pg);
     }
     if(!project._pageId && project.pages[0]) project._pageId=project.pages[0].id;
@@ -215,8 +217,8 @@ document.addEventListener('DOMContentLoaded', () => {
     renderPinsList();
     renderProjectLabel();
     drawMeasurements();
-    toggleStrict.checked=!!project.settings.strictRules;
-    toggleField.checked=!!project.settings.fieldMode;
+    toggleStrict.checked = !!project.settings.strictRules;
+    toggleField.checked = !!project.settings.fieldMode;
   }
 
   let _typesFilled = false;
@@ -231,15 +233,19 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function renderProjectLabel(){
-    projectLabel.textContent = `Project: ${project.name} • Pages: ${project.pages.length} • Pins: ${project.pages.reduce((a,p)=>a+(p.pins?.length||0),0)}`;
+    const totalPins = project.pages.reduce((a,p)=>a+(p.pins?p.pins.length:0),0);
+    projectLabel.textContent = `Project: ${project.name} • Pages: ${project.pages.length} • Pins: ${totalPins}`;
   }
 
   function renderThumbs(){
     thumbsEl.innerHTML='';
     project.pages.forEach((pg)=>{
-      const d=document.createElement('div'); d.className='thumb'+(project._pageId===pg.id?' active':'');
+      const d=document.createElement('div');
+      d.className='thumb'+(project._pageId===pg.id?' active':'');
       const im=document.createElement('img'); im.src=pg.blobUrl; d.appendChild(im);
-      const inp=document.createElement('input'); inp.value=pg.name; inp.oninput=()=>{ pg.name=inp.value; pg.updatedAt=Date.now(); saveProject(project); renderProjectLabel(); }; d.appendChild(inp);
+      const inp=document.createElement('input'); inp.value=pg.name;
+      inp.oninput=()=>{ pg.name=inp.value; pg.updatedAt=Date.now(); saveProject(project); renderProjectLabel(); };
+      d.appendChild(inp);
       d.onclick=()=>{ project._pageId=pg.id; saveProject(project); renderStage(); renderPins(); drawMeasurements(); };
       thumbsEl.appendChild(d);
     });
@@ -266,7 +272,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const el=document.createElement('div');
       el.className='pin'+(p.id===project._sel?' selected':'');
       el.dataset.id=p.id;
-      el.textContent=SHORT[p.sign_type]||p.sign_type.slice(0,3).toUpperCase();
+      el.textContent=SHORT[p.sign_type]||((p.sign_type||'').slice(0,3).toUpperCase());
       el.style.left=p.x_pct+'%';
       el.style.top=p.y_pct+'%';
       el.style.background=SIGN_TYPES[p.sign_type]||'#a3e635';
@@ -274,6 +280,12 @@ document.addEventListener('DOMContentLoaded', () => {
       el.style.fontSize= fieldMode? '0.9rem' : '0.75rem';
       pinLayer.appendChild(el);
 
+      // dragging
+      el.addEventListener('pointerdown',(e)=>{
+        e.stopPropagation();
+        dragEl = el; el.setPointerCapture?.(e.pointerId);
+        selectPin(p.id);
+      });
       el.addEventListener('dblclick',()=>{ selectPin(p.id); openPhotoModal(); });
     });
 
@@ -301,18 +313,16 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  function selectedPin(){
-    const idv=project._sel;
-    if(!idv) return null;
-    return findPin(idv);
-  }
-
   function updatePinDetails(){
     const p=selectedPin();
     selId.textContent=p? p.id : 'None';
-    fieldType.value=p?.sign_type||''; fieldRoomNum.value=p?.room_number||''; fieldRoomName.value=p?.room_name||''; fieldBuilding.value=p?.building||''; fieldLevel.value=p?.level||''; fieldNotes.value=p?.notes||'';
+    fieldType.value=p && p.sign_type ? p.sign_type : '';
+    fieldRoomNum.value=p && p.room_number ? p.room_number : '';
+    fieldRoomName.value=p && p.room_name ? p.room_name : '';
+    fieldBuilding.value=p && p.building ? p.building : '';
+    fieldLevel.value=p && p.level ? p.level : '';
+    fieldNotes.value=p && p.notes ? p.notes : '';
     posLabel.textContent=p? pctLabel(p.x_pct,p.y_pct) : '—';
-    gpsLabel.textContent='—'; // No GPS captured
     renderWarnings();
   }
 
@@ -327,11 +337,56 @@ document.addEventListener('DOMContentLoaded', () => {
     if((/ELECTRICAL|DATA/).test(rn) && p.sign_type!=='BOH'){
       list.push('Recommended BOH for ELECTRICAL/DATA rooms.');
     }
-    list.forEach(s=>{ const t=document.createElement('span'); t.className='tag warn'; t.textContent=s; warnsEl.appendChild(t); });
+    list.forEach(s=>{
+      const t=document.createElement('div'); t.className='footer-note warn'; t.textContent=s; warnsEl.appendChild(t);
+    });
+  }
+
+  function selectedPin(){
+    const idv=project._sel || null;
+    if(!idv) return null;
+    return findPin(idv);
+  }
+
+  function selectPin(idv){
+    project._sel=idv; saveProject(project); renderPins();
+    const el=[...pinLayer.children].find(x=>x.dataset.id===idv);
+    if(el){ el.scrollIntoView({block:'center', inline:'center', behavior:'smooth'}); }
+    const p=findPin(idv);
+    if(p){
+      const pgId=(project.pages.find(pg=>(pg.pins||[]).includes(p))||{}).id;
+      if(pgId && project._pageId!==pgId){ project._pageId=pgId; saveProject(project); renderStage(); renderPins(); drawMeasurements(); }
+    }
   }
 
   /***********************
-   * Measuring (main view)
+   * Dragging on stage   *
+   ***********************/
+  on(pinLayer,'pointermove',(e)=>{
+    if(!dragEl) return;
+    e.preventDefault();
+    const pin = findPin(dragEl.dataset.id); if(!pin) return;
+    const pct = toPctCoords(e);
+    dragEl.style.left = pct.x_pct+'%';
+    dragEl.style.top  = pct.y_pct+'%';
+    posLabel.textContent = pctLabel(pct.x_pct,pct.y_pct);
+  });
+  on(pinLayer,'pointerup',(e)=>{
+    if(!dragEl) return;
+    const pin = findPin(dragEl.dataset.id);
+    if(pin){
+      const pct=toPctCoords(e);
+      commit();
+      pin.x_pct=pct.x_pct; pin.y_pct=pct.y_pct; pin.lastEdited=Date.now();
+      saveProject(project);
+      renderPinsList();
+    }
+    dragEl.releasePointerCapture?.(e.pointerId);
+    dragEl=null;
+  });
+
+  /***********************
+   * Measurement (main)  *
    ***********************/
   function startCalibration(scope){
     calibFirst=null; measureFirst=null;
@@ -346,46 +401,11 @@ document.addEventListener('DOMContentLoaded', () => {
   function resetMeasurements(scope){
     if(scope==='main'){
       const pg=currentPage(); if(!pg) return;
-      pg.measurements=[];
-      drawMeasurements();
-    }else{
-      const ph=photoState.pin?.photos[photoState.idx];
+      pg.measurements=[]; drawMeasurements();
+    } else {
+      const ph = photoState.pin ? photoState.pin.photos[photoState.idx] : null;
       if(ph){ ph.measurements=[]; drawPhotoMeasurements(); }
     }
-  }
-
-  function drawMeasurements(){
-    const page=currentPage();
-    while(measureSvg.firstChild) measureSvg.removeChild(measureSvg.firstChild);
-    if(!page||!page.measurements) return;
-
-    page.measurements.forEach(m=>{
-      // Points are STAGE-local pixels
-      const a = m.points[0];
-      const b = m.points[1];
-
-      const dx = Math.abs(a.x - b.x);
-      const dy = Math.abs(a.y - b.y);
-      const color = (dx > dy) ? '#ef4444' : (dy > dx) ? '#3b82f6' : '#f59e0b';
-
-      const line=document.createElementNS('http://www.w3.org/2000/svg','line');
-      line.setAttribute('x1',a.x); line.setAttribute('y1',a.y);
-      line.setAttribute('x2',b.x); line.setAttribute('y2',b.y);
-      line.setAttribute('stroke',color);
-      measureSvg.appendChild(line);
-
-      const midx=(a.x+b.x)/2, midy=(a.y+b.y)/2;
-      const text=document.createElementNS('http://www.w3.org/2000/svg','text');
-      const ft = m.feet
-        ? m.feet.toFixed(2)+' ft'
-        : (currentPage().scalePxPerFt
-            ? (dist(a,b)/currentPage().scalePxPerFt).toFixed(2)+' ft'
-            : dist(a,b).toFixed(0)+' px');
-      text.setAttribute('x',midx);
-      text.setAttribute('y',midy-6);
-      text.textContent=ft;
-      measureSvg.appendChild(text);
-    });
   }
 
   on(stage,'click',(e)=>{
@@ -407,6 +427,30 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  function drawMeasurements(){
+    const page=currentPage();
+    while(measureSvg.firstChild) measureSvg.removeChild(measureSvg.firstChild);
+    if(!page||!page.measurements) return;
+    page.measurements.forEach(m=>{
+      const a=toScreen(m.points[0]); const b=toScreen(m.points[1]);
+      const dx=Math.abs(a.x-b.x), dy=Math.abs(a.y-b.y);
+      const color = (dx>dy)? '#ef4444' : (dy>dx)? '#3b82f6' : '#f59e0b';
+      const line=document.createElementNS('http://www.w3.org/2000/svg','line');
+      line.setAttribute('x1',a.x); line.setAttribute('y1',a.y);
+      line.setAttribute('x2',b.x); line.setAttribute('y2',b.y);
+      line.setAttribute('stroke',color);
+      measureSvg.appendChild(line);
+
+      const midx=(a.x+b.x)/2, midy=(a.y+b.y)/2;
+      const text=document.createElementNS('http://www.w3.org/2000/svg','text');
+      const ft = m.feet ? m.feet.toFixed(2)+' ft'
+        : (page.scalePxPerFt ? (dist(a,b)/page.scalePxPerFt).toFixed(2)+' ft' : (dist(a,b).toFixed(0)+' px'));
+      text.setAttribute('x',midx); text.setAttribute('y',midy-6);
+      text.textContent=ft;
+      measureSvg.appendChild(text);
+    });
+  }
+
   /*************************
    * Photo modal & measure *
    *************************/
@@ -418,29 +462,19 @@ document.addEventListener('DOMContentLoaded', () => {
   function showPhoto(){
     const ph=photoState.pin.photos[photoState.idx];
     photoImg.src=ph.dataUrl; photoPinId.textContent=photoState.pin.id; photoName.textContent=ph.name;
-    photoMeaCount.textContent=(ph.measurements?.length||0); drawPhotoMeasurements();
+    photoMeaCount.textContent=(ph.measurements ? ph.measurements.length : 0);
+    drawPhotoMeasurements();
   }
   function closePhotoModal(){ photoModal.style.display='none'; }
 
   function drawPhotoMeasurements(){
     while(photoMeasureSvg.firstChild) photoMeasureSvg.removeChild(photoMeasureSvg.firstChild);
-    const ph=photoState.pin?.photos[photoState.idx]; if(!ph||!ph.measurements) return;
-
-    // compute offset of the centered image inside the SVG overlay
-    const vr = photoMeasureSvg.getBoundingClientRect();
-    const ir = photoImg.getBoundingClientRect();
-    const offsetX = ir.left - vr.left;
-    const offsetY = ir.top  - vr.top;
-
+    const ph=photoState.pin ? photoState.pin.photos[photoState.idx] : null;
+    if(!ph||!ph.measurements) return;
     ph.measurements.forEach(m=>{
-      // stored points are image-local; shift by offset to draw in SVG coords
-      const aImg=m.points[0], bImg=m.points[1];
-      const a={x:aImg.x+offsetX, y:aImg.y+offsetY};
-      const b={x:bImg.x+offsetX, y:bImg.y+offsetY};
-
+      const a=m.points[0], b=m.points[1];
       const dx=Math.abs(a.x-b.x), dy=Math.abs(a.y-b.y);
       const color=(dx>dy)? '#ef4444' : (dy>dx)? '#3b82f6' : '#f59e0b';
-
       const line=document.createElementNS('http://www.w3.org/2000/svg','line');
       line.setAttribute('x1',a.x); line.setAttribute('y1',a.y);
       line.setAttribute('x2',b.x); line.setAttribute('y2',b.y);
@@ -449,13 +483,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const midx=(a.x+b.x)/2, midy=(a.y+b.y)/2;
       const text=document.createElementNS('http://www.w3.org/2000/svg','text');
-      const ft = m.feet
-        ? m.feet.toFixed(2)+' ft'
-        : (ph.scalePxPerFt
-            ? (dist(aImg,bImg)/ph.scalePxPerFt).toFixed(2)+' ft'
-            : dist(aImg,bImg).toFixed(0)+' px');
-      text.setAttribute('x',midx);
-      text.setAttribute('y',midy-6);
+      const ft = (m.feet ? m.feet.toFixed(2)+' ft'
+        : (ph.scalePxPerFt ? (dist(a,b)/ph.scalePxPerFt).toFixed(2)+' ft' : (dist(a,b).toFixed(0)+' px')));
+      text.setAttribute('x',midx); text.setAttribute('y',midy-6);
       text.textContent=ft;
       photoMeasureSvg.appendChild(text);
     });
@@ -467,27 +497,30 @@ document.addEventListener('DOMContentLoaded', () => {
   on($('btnPhotoPrev'),'click',()=>{ if(!photoState.pin) return; photoState.idx=Math.max(0,photoState.idx-1); showPhoto(); });
   on($('btnPhotoNext'),'click',()=>{ if(!photoState.pin) return; photoState.idx=Math.min(photoState.pin.photos.length-1,photoState.idx+1); showPhoto(); });
   on($('btnPhotoDelete'),'click',()=>{ if(!photoState.pin) return; if(!confirm('Delete this photo?')) return; commit(); photoState.pin.photos.splice(photoState.idx,1); photoState.idx=Math.max(0,photoState.idx-1); saveProject(project); if(photoState.pin.photos.length===0){ closePhotoModal(); } else { showPhoto(); } });
-  on($('btnPhotoDownload'),'click',()=>{ const ph=photoState.pin?.photos[photoState.idx]; if(!ph) return; downloadFile(ph.name, dataURLtoBlob(ph.dataUrl)); });
+  on($('btnPhotoDownload'),'click',()=>{ const ph=photoState.pin ? photoState.pin.photos[photoState.idx] : null; if(!ph) return; downloadFile(ph.name||'photo.png', dataURLtoBlob(ph.dataUrl)); });
 
-  // Photo measure clicks
   on($('photoMeasureSvg'),'click',(e)=>{
-    const ph = photoState.pin?.photos[photoState.idx]; if(!ph) return;
-    const ir = photoImg.getBoundingClientRect();
-    const pt = { x: e.clientX-ir.left, y:e.clientY-ir.top }; // image-local
+    const ph = photoState.pin ? photoState.pin.photos[photoState.idx] : null; if(!ph) return;
+    const rect = photoImg.getBoundingClientRect();
+    const pt = { x: e.clientX-rect.left, y:e.clientY-rect.top };
     if(photoState.calib===null){ photoState.calib = pt; return; }
     if(photoState.calib && !photoState.measureTmp){
       const px = dist(photoState.calib, pt); const ft=parseFloat(prompt('Enter feet for calibration:','10'))||10;
-      ph.measurements=ph.measurements||[]; ph.scalePxPerFt = px/ft; photoState.calib=null; drawPhotoMeasurements(); return;
+      if(!ph.measurements) ph.measurements=[];
+      ph.scalePxPerFt = px/ft; photoState.calib=null; drawPhotoMeasurements(); return;
     }
   });
 
   on(photoImg,'click',(e)=>{
-    if(!photoState.measure) return; const ph=photoState.pin?.photos[photoState.idx]; if(!ph) return;
-    const ir = photoImg.getBoundingClientRect(); const pt={x:e.clientX-ir.left,y:e.clientY-ir.top}; // image-local
+    if(!photoState.measure) return;
+    const ph = photoState.pin ? photoState.pin.photos[photoState.idx] : null; if(!ph) return;
+    const rect = photoImg.getBoundingClientRect(); const pt={x:e.clientX-rect.left,y:e.clientY-rect.top};
     if(!photoMeasureFirst){ photoMeasureFirst=pt; return; }
     const m={id:id(), kind:'photo', points:[photoMeasureFirst, pt]};
     if(ph.scalePxPerFt){ m.feet=dist(photoMeasureFirst,pt)/ph.scalePxPerFt; }
-    ph.measurements=ph.measurements||[]; ph.measurements.push(m); photoMeasureFirst=null; drawPhotoMeasurements(); $('photoMeaCount').textContent=ph.measurements.length;
+    if(!ph.measurements) ph.measurements=[];
+    ph.measurements.push(m); photoMeasureFirst=null; drawPhotoMeasurements();
+    $('photoMeaCount').textContent=ph.measurements.length.toString();
   });
 
   /****************
@@ -496,9 +529,16 @@ document.addEventListener('DOMContentLoaded', () => {
   function toRows(){
     const rows=[];
     project.pages.forEach(pg=> (pg.pins||[]).forEach(p=> rows.push({
-      id:p.id, sign_type:p.sign_type||'', room_number:p.room_number||'', room_name:p.room_name||'',
-      building:p.building||'', level:p.level||'', x_pct:fix(p.x_pct), y_pct:fix(p.y_pct),
-      notes:p.notes||'', page_name:pg.name,
+      id:p.id,
+      sign_type:p.sign_type||'',
+      room_number:p.room_number||'',
+      room_name:p.room_name||'',
+      building:p.building||'',
+      level:p.level||'',
+      x_pct:fix(p.x_pct),
+      y_pct:fix(p.y_pct),
+      notes:p.notes||'',
+      page_name:pg.name,
       last_edited: new Date(p.lastEdited||project.updatedAt).toISOString()
     })));
     rows.sort((a,b)=> (a.building||'').localeCompare(b.building||'')
@@ -509,10 +549,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function exportCSV(){
     const rows = toRows();
-    const csv=[Object.keys(rows[0]||{}).join(','), ...rows.map(r=>Object.values(r).map(v=>csvEscape(v)).join(','))].join('\n');
-    downloadText(project.name.replace(/\W+/g,'_')+"_signage.csv", csv);
+    const header = Object.keys(rows[0]||{}).join(',');
+    const body = rows.map(r=>Object.values(r).map(v=>csvEscape(v)).join(',')).join('\n');
+    downloadText(project.name.replace(/\W+/g,'_')+"_signage.csv", header+'\n'+body);
   }
-
   function exportXLSX(){
     const rows = toRows(); const wb = XLSX.utils.book_new();
     const info=[[ 'Project', project.name ], [ 'Exported', new Date().toLocaleString() ], [ 'Total Signs', rows.length ], [ 'Total Pages', project.pages.length ]];
@@ -520,98 +560,176 @@ document.addEventListener('DOMContentLoaded', () => {
     info.push([]); info.push(['Breakdown']); Object.entries(counts).forEach(([k,v])=> info.push([k,v]));
     const wsInfo = XLSX.utils.aoa_to_sheet(info);
     const ws = XLSX.utils.json_to_sheet(rows, {header: Object.keys(rows[0]||{})});
-    XLSX.utils.book_append_sheet(wb, wsInfo, 'Project Info'); XLSX.utils.book_append_sheet(wb, ws, 'Signage');
+    XLSX.utils.book_append_sheet(wb, wsInfo, 'Project Info');
+    XLSX.utils.book_append_sheet(wb, ws, 'Signage');
     const out = XLSX.write(wb, {bookType:'xlsx', type:'array'});
     downloadFile(project.name.replace(/\W+/g,'_')+'_signage.xlsx', new Blob([out], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
   }
-
   async function exportZIP(){
-    const rows=toRows(); const zip=new JSZip();
-    zip.file('signage.csv', [Object.keys(rows[0]||{}).join(','), ...rows.map(r=>Object.values(r).map(v=>csvEscape(v)).join(','))].join('\n'));
+    const rows=toRows();
+    const zip=new JSZip();
+    const header = Object.keys(rows[0]||{}).join(',');
+    const body = rows.map(r=>Object.values(r).map(v=>csvEscape(v)).join(',')).join('\n');
+    zip.file('signage.csv', header+'\n'+body);
+
     // photos
-    project.pages.forEach(pg=> pg.pins.forEach(pin=> pin.photos?.forEach((ph, idx)=>{ const folder=zip.folder(`photos/${pin.id}`); folder.file(ph.name||`photo_${idx+1}.png`, dataURLtoArrayBuffer(ph.dataUrl)); })) );
-    const blob = await zip.generateAsync({type:'blob'}); downloadFile(project.name.replace(/\W+/g,'_')+'_export.zip', blob);
+    project.pages.forEach(pg=>{
+      (pg.pins||[]).forEach(pin=>{
+        (pin.photos||[]).forEach((ph, idx)=>{
+          const folder=zip.folder(`photos/${pin.id}`);
+          folder.file(ph.name||`photo_${idx+1}.png`, dataURLtoArrayBuffer(ph.dataUrl));
+        });
+      });
+    });
+
+    const blob = await zip.generateAsync({type:'blob'});
+    downloadFile(project.name.replace(/\W+/g,'_')+'_export.zip', blob);
   }
 
   function importCSV(text){
     const lines = text.split(/\r?\n/).filter(Boolean);
     if(lines.length<2) return;
-    const hdr=lines[0].split(',').map(h=>h.trim()); commit();
+    const hdr=lines[0].split(',').map(h=>h.trim());
+    commit();
     for(let i=1;i<lines.length;i++){
-      const cells = parseCsvLine(lines[i]); const row={}; hdr.forEach((h,idx)=> row[h]=cells[idx]||'');
+      const cells = parseCsvLine(lines[i]);
+      const row={};
+      hdr.forEach((h,idx)=>{ row[h]=cells[idx]||''; });
       const p = makePin(parseFloat(row.x_pct)||50, parseFloat(row.y_pct)||50);
-      p.sign_type=row.sign_type||''; p.room_number=row.room_number||''; p.room_name=row.room_name||''; p.building=row.building||''; p.level=row.level||''; p.notes=row.notes||'';
-      currentPage().pins.push(p);
+      p.sign_type=row.sign_type||''; p.room_number=row.room_number||''; p.room_name=row.room_name||'';
+      p.building=row.building||''; p.level=row.level||''; p.notes=row.notes||'';
+      const pg=currentPage(); if(pg) pg.pins.push(p);
     }
     saveProject(project); renderPins(); renderPinsList(); alert('Imported rows into current page.');
   }
 
-  /****************
-   * Project load *
-   ****************/
-  // Load / init project state
-  projects = loadProjects();
-  currentProjectId = localStorage.getItem('survey:lastOpenProjectId') || null;
-  project = currentProjectId ? projects.find(p=>p.id===currentProjectId) : null;
-  if(!project){ project = newProject('Untitled Project'); saveProject(project); }
-  selectProject(project.id);
-
-  /****************
-   * Toolbar wire *
-   ****************/
-  on($('btnNew'),'click',()=>{ const name=prompt('New project name?','New Project'); if(!name) return; commit(); const p=newProject(name); saveProject(p); selectProject(p.id); });
-  on($('btnOpen'),'click',()=>{
-    const items = projects.map(p=>`• ${p.name} (${new Date(p.updatedAt).toLocaleString()}) [${p.id}]`).join('\n');
-    const id = prompt('Projects:\n'+items+'\n\nEnter project id to open:');
-    const found = projects.find(p=>p.id===id);
-    if(found){ selectProject(found.id); } else alert('Not found');
+  /***********************
+   * Toolbar + UI events *
+   ***********************/
+  // New / SaveAs / Rename
+  on($('btnNew'),'click',()=>{
+    const name=prompt('New project name?','New Project'); if(!name) return;
+    commit();
+    const p=newProject(name); projects.push(p); saveProject(p); selectProject(p.id);
   });
-  on($('btnSaveAs'),'click',()=>{ const name=prompt('Duplicate as name:', project.name+' (copy)'); if(!name) return; commit(); const copy=JSON.parse(JSON.stringify(project)); copy.id=id(); copy.name=name; copy.createdAt=Date.now(); copy.updatedAt=Date.now(); saveProject(copy); selectProject(copy.id); });
-  on($('btnRename'),'click',()=>{ const name=prompt('Rename project:', project.name); if(!name) return; commit(); project.name=name; saveProject(project); renderProjectLabel(); });
+  on($('btnSaveAs'),'click',()=>{
+    const name=prompt('Duplicate as name:', project.name+' (copy)'); if(!name) return;
+    commit();
+    const copy=JSON.parse(JSON.stringify(project));
+    copy.id=id(); copy.name=name; copy.createdAt=Date.now(); copy.updatedAt=Date.now();
+    projects.push(copy); saveProject(copy); selectProject(copy.id);
+  });
+  on($('btnRename'),'click',()=>{
+    const name=prompt('Rename project:', project.name); if(!name) return;
+    commit(); project.name=name; saveProject(project); renderProjectLabel(); renderProjectList();
+  });
 
+  // Projects modal
+  on($('btnOpenModal'),'click',()=>{ renderProjectList(); projectModal.style.display='flex'; });
+  on($('btnCloseProjects'),'click',()=>{ projectModal.style.display='none'; });
+  on($('btnCreateProject'),'click',()=>{
+    const name=prompt('Project name:','Untitled Project'); if(!name) return;
+    const p=newProject(name); projects.push(p); saveProject(p); selectProject(p.id); renderProjectList();
+  });
+
+  function renderProjectList(){
+    if(!projectList) return;
+    projectList.innerHTML='';
+    if(!projects.length){
+      const d=document.createElement('div'); d.style.padding='1rem'; d.textContent='No projects yet. Create one with “New Project”.';
+      projectList.appendChild(d); return;
+    }
+    projects
+      .slice()
+      .sort((a,b)=> (b.updatedAt||0)-(a.updatedAt||0))
+      .forEach(p=>{
+        const row=document.createElement('div'); row.className='proj-row';
+        const title=document.createElement('div');
+        title.innerHTML = `<strong>${p.name}</strong> <span class="muted">(${new Date(p.updatedAt).toLocaleString()})</span>`;
+        const open=document.createElement('button'); open.textContent='Open';
+        open.onclick=()=>{ selectProject(p.id); projectModal.style.display='none'; };
+        const dup=document.createElement('button'); dup.textContent='Duplicate';
+        dup.onclick=()=>{ const name=prompt('Duplicate as:', p.name+' (copy)'); if(!name) return;
+          const copy=JSON.parse(JSON.stringify(p)); copy.id=id(); copy.name=name; copy.createdAt=Date.now(); copy.updatedAt=Date.now();
+          projects.push(copy); saveProject(copy); renderProjectList(); };
+        const del=document.createElement('button'); del.textContent='Delete';
+        del.onclick=()=>{ if(!confirm('Delete this project?')) return;
+          projects = projects.filter(x=>x.id!==p.id);
+          localStorage.setItem('survey:projects', JSON.stringify(projects));
+          if(project && project.id===p.id){
+            if(projects[0]) selectProject(projects[0].id);
+            else { project = newProject('Untitled Project'); saveProject(project); selectProject(project.id); }
+          }
+          renderProjectList();
+        };
+        row.appendChild(title); row.appendChild(open); row.appendChild(dup); row.appendChild(del);
+        projectList.appendChild(row);
+      });
+  }
+
+  // Uploads
   on($('btnUpload'),'click',()=> inputUpload.click());
   on(inputUpload,'change', async (e)=>{
-    const files=[...e.target.files]; if(!files.length) return; commit();
+    const files=[...e.target.files]; if(!files.length) return;
+    commit();
     for(const f of files){
       if(f.type==='application/pdf'){ await addPdfPages(f); }
       else if(f.type.startsWith('image/')){ const url=URL.createObjectURL(f); const name=f.name.replace(/\.[^.]+$/,''); addImagePage(url,name); }
     }
     renderAll();
+    inputUpload.value='';
   });
 
+  // Exports
   on($('btnExportCSV'),'click',()=> exportCSV());
   on($('btnExportXLSX'),'click',()=> exportXLSX());
   on($('btnExportZIP'),'click',()=> exportZIP());
 
+  // Import CSV
   on($('btnImportCSV'),'click',()=> $('inputImportCSV').click());
-  on($('inputImportCSV'),'change', async (e)=>{ const f=e.target.files?.[0]; if(!f) return; const text=await f.text(); importCSV(text); });
+  on($('inputImportCSV'),'change', async (e)=>{
+    const f=e.target.files ? e.target.files[0] : null; if(!f) return;
+    const text=await f.text(); importCSV(text); e.target.value='';
+  });
 
-  on($('btnOCR'),'click',()=> ocrCurrentView());
+  // OCR
+  on($('btnOCR'),'click', async ()=>{
+    const img=stageImage; if(!img || !img.src){ alert('No page image.'); return; }
+    const canvas = document.createElement('canvas');
+    canvas.width = img.naturalWidth || img.width;
+    canvas.height = img.naturalHeight || img.height;
+    const ctx=canvas.getContext('2d'); ctx.drawImage(img,0,0);
+    const result = await Tesseract.recognize(canvas, 'eng');
+    let out = (result && result.data && result.data.text) ? result.data.text.trim() : '';
+    if(!out){ alert('No text recognized.'); return; }
+    const head = out.slice(0,200);
+    try { await navigator.clipboard.writeText(out); } catch{}
+    inputSearch.value=head; renderPinsList();
+    alert('OCR done. First 200 chars placed in search. Full text copied to clipboard.');
+  });
 
-  const btnCalibrate = $('btnCalibrate');
-  const btnMeasureToggle = $('btnMeasureToggle');
-  const btnMeasureReset = $('btnMeasureReset');
+  // Calibrate / measure buttons
+  on($('btnCalibrate'),'click',()=> startCalibration('main'));
+  on($('btnMeasureToggle'),'click',()=> toggleMeasuring('main'));
+  on($('btnMeasureReset'),'click',()=> resetMeasurements('main'));
 
-  on(btnCalibrate,'click',()=> startCalibration('main'));
-  on(btnMeasureToggle,'click',()=> toggleMeasuring('main'));
-  on(btnMeasureReset,'click',()=> resetMeasurements('main'));
-
+  // Undo / Redo
   on($('btnUndo'),'click',()=> undo());
   on($('btnRedo'),'click',()=> redo());
 
-  on($('btnClearPins'),'click',()=>{ if(!confirm('Clear ALL pins on this page?')) return; commit(); currentPage().pins=[]; renderAll(); });
-  on($('btnAddPin'),'click',()=> startAddPin());
+  // Pins
+  on($('btnClearPins'),'click',()=>{ if(!confirm('Clear ALL pins on this page?')) return; commit(); const pg=currentPage(); if(pg) pg.pins=[]; renderAll(); });
+  on($('btnAddPin'),'click',()=> { addingPin = !addingPin; $('btnAddPin').classList.toggle('ok', addingPin); });
 
+  // Filters + toggles
   on(toggleStrict,'change',()=>{ project.settings.strictRules = !!toggleStrict.checked; saveProject(project); renderWarnings(); });
   on(toggleField,'change',()=>{ project.settings.fieldMode = !!toggleField.checked; saveProject(project); renderPins(); });
-
   on(inputBuilding,'input',()=>{ projectContext.building = inputBuilding.value; });
   on(inputLevel,'input',()=>{ projectContext.level = inputLevel.value; });
-
   on(inputSearch,'input',()=> renderPinsList());
   on(filterType,'change',()=> renderPins());
 
-  // Right panel fields
+  // Right panel editing
   [fieldType, fieldRoomNum, fieldRoomName, fieldBuilding, fieldLevel, fieldNotes].forEach(el=> on(el,'input',()=>{
     const pin = selectedPin(); if(!pin) return; commit();
     if(el===fieldType) pin.sign_type = el.value || '';
@@ -623,73 +741,36 @@ document.addEventListener('DOMContentLoaded', () => {
     pin.lastEdited=Date.now(); saveProject(project); renderPins(); renderWarnings(); renderPinsList();
   }));
 
+  // Add photos
   on($('btnAddPhoto'),'click',()=> $('inputPhoto').click());
   on($('inputPhoto'),'change', async (e)=>{
     const pin = selectedPin(); if(!pin) return alert('Select a pin first.');
     const files=[...e.target.files]; if(!files.length) return; commit();
-    for(const f of files){ const url=await fileToDataURL(f); pin.photos.push({name:f.name,dataUrl:url,measurements:[]}); }
+    for(const f of files){
+      const url=await fileToDataURL(f);
+      pin.photos.push({name:f.name, dataUrl:url, measurements:[]});
+    }
     pin.lastEdited=Date.now(); saveProject(project); renderPinsList(); alert('Photo(s) added.');
+    e.target.value='';
   });
-
   on($('btnOpenPhoto'),'click',()=> openPhotoModal());
-  on($('btnDuplicate'),'click',()=>{ const pin=selectedPin(); if(!pin) return; commit(); const p=JSON.parse(JSON.stringify(pin)); p.id=id(); p.x_pct+=2; p.y_pct+=2; p.lastEdited=Date.now(); currentPage().pins.push(p); saveProject(project); renderPins(); renderPinsList(); selectPin(p.id); });
-  on($('btnDelete'),'click',()=>{ const pin=selectedPin(); if(!pin) return; if(!confirm('Delete selected pin?')) return; commit(); currentPage().pins=currentPage().pins.filter(x=>x.id!==pin.id); saveProject(project); renderPins(); renderPinsList(); clearSelection(); });
+  on($('btnDuplicate'),'click',()=>{ const pin=selectedPin(); if(!pin) return; commit(); const p=JSON.parse(JSON.stringify(pin)); p.id=id(); p.x_pct=Math.min(100, p.x_pct+2); p.y_pct=Math.min(100, p.y_pct+2); p.lastEdited=Date.now(); const pg=currentPage(); if(pg) pg.pins.push(p); saveProject(project); renderPins(); renderPinsList(); selectPin(p.id); });
+  on($('btnDelete'),'click',()=>{ const pin=selectedPin(); if(!pin) return; if(!confirm('Delete selected pin?')) return; commit(); const pg=currentPage(); if(pg) pg.pins=pg.pins.filter(x=>x.id!==pin.id); saveProject(project); renderPins(); renderPinsList(); project._sel=null; updatePinDetails(); });
 
-  on($('btnBulkType'),'click',()=>{ const type = prompt('Enter type for selected checkboxes (or empty to cancel):'); if(type==null) return; commit(); const ids = checkedPinIds(); ids.forEach(idv=>{ const p=findPin(idv); if(p){ p.sign_type=type; p.lastEdited=Date.now(); }}); saveProject(project); renderPins(); renderPinsList(); });
-  on($('btnBulkBL'),'click',()=>{ const b = prompt('Building value (blank to keep):', inputBuilding.value||''); if(b==null) return; const l = prompt('Level value (blank to keep):', inputLevel.value||''); if(l==null) return; commit(); const ids = checkedPinIds(); ids.forEach(idv=>{ const p=findPin(idv); if(p){ if(b!=='') p.building=b; if(l!=='') p.level=l; p.lastEdited=Date.now(); }}); saveProject(project); renderPins(); renderPinsList(); });
-
-  /***********************
-   * Add Pin + Dragging  *
-   ***********************/
-  function startAddPin(){ addingPin=!addingPin; $('btnAddPin').classList.toggle('ok', addingPin); }
-
+  // Stage click for adding pin
   on($('stage'),'pointerdown',(e)=>{
-    if(e.target.classList.contains('pin')) return;
+    if(e.target.classList && e.target.classList.contains('pin')) return;
     if(!addingPin) return;
-    const {x_pct,y_pct} = toPctCoords(e);
+    const pct = toPctCoords(e);
     commit();
-    const p = makePin(x_pct,y_pct);
-    currentPage().pins.push(p); saveProject(project); renderPins(); renderPinsList(); selectPin(p.id);
+    const p = makePin(pct.x_pct, pct.y_pct);
+    const pg=currentPage(); if(pg){ pg.pins.push(p); saveProject(project); renderPins(); renderPinsList(); selectPin(p.id); }
     addingPin=false; $('btnAddPin').classList.remove('ok');
   });
 
-  on(pinLayer,'pointerdown',(e)=>{
-    const el = e.target.closest('.pin'); if(!el) return;
-    const idv = el.dataset.id; selectPin(idv);
-    dragging = el; el.setPointerCapture?.(e.pointerId);
-  });
-  on(pinLayer,'pointermove',(e)=>{
-    if(!dragging) return; e.preventDefault();
-    const pin = findPin(dragging.dataset.id); if(!pin) return;
-    const {x_pct,y_pct} = toPctCoords(e);
-    dragging.style.left = x_pct+'%';
-    dragging.style.top = y_pct+'%';
-    posLabel.textContent = pctLabel(x_pct,y_pct);
-  });
-  on(pinLayer,'pointerup',(e)=>{
-    if(!dragging) return;
-    const pin = findPin(dragging.dataset.id);
-    if(pin){ commit(); const {x_pct,y_pct}=toPctCoords(e); pin.x_pct=x_pct; pin.y_pct=y_pct; pin.lastEdited=Date.now(); saveProject(project); renderPinsList(); }
-    dragging.releasePointerCapture?.(e.pointerId); dragging=null;
-  });
-
   /****************
-   * OCR (optional)
+   * Undo / Redo  *
    ****************/
-  async function ocrCurrentView(){
-    const canvas = document.createElement('canvas');
-    const img=stageImage; if(!img || !img.src){ alert('No page image.'); return; }
-    const w=img.naturalWidth||img.width, h=img.naturalHeight||img.height; canvas.width=w; canvas.height=h; const ctx=canvas.getContext('2d'); ctx.drawImage(img,0,0);
-    const { data: { text } } = await Tesseract.recognize(canvas, 'eng');
-    let out = (text||'').trim(); if(!out){ alert('No text recognized.'); return; }
-    const head = out.slice(0,200);
-    try { await navigator.clipboard.writeText(out); } catch{}
-    inputSearch.value=head; renderPinsList(); alert('OCR done. First 200 chars placed in search. Full text copied to clipboard.');
-  }
-
-  /************
-   * Undo/Redo
-   ************/
   function snapshot(){ return JSON.stringify(project); }
   function loadSnapshot(s){
     project=JSON.parse(s);
@@ -702,17 +783,21 @@ document.addEventListener('DOMContentLoaded', () => {
   function undo(){ if(!UNDO.length) return; REDO.push(snapshot()); const s=UNDO.pop(); loadSnapshot(s); renderAll(); }
   function redo(){ if(!REDO.length) return; UNDO.push(snapshot()); const s=REDO.pop(); loadSnapshot(s); renderAll(); }
 
-  // Initial render & observers
-  renderAll();
-  const ro=new ResizeObserver(()=>{ measureSvg.setAttribute('width', stage.clientWidth); measureSvg.setAttribute('height', stage.clientHeight); }); ro.observe(stage);
+  // Resize: keep SVG overlay sized
+  const ro=new ResizeObserver(()=>{
+    measureSvg.setAttribute('width', String(stage.clientWidth));
+    measureSvg.setAttribute('height', String(stage.clientHeight));
+  });
+  ro.observe(stage);
 
   // Keyboard shortcuts
   window.addEventListener('keydown',(e)=>{
     if((e.ctrlKey||e.metaKey) && !e.shiftKey && e.key.toLowerCase()==='z'){ e.preventDefault(); undo(); }
     if((e.ctrlKey||e.metaKey) && e.shiftKey && e.key.toLowerCase()==='z'){ e.preventDefault(); redo(); }
-    if(e.key==='Delete'){ const p=selectedPin(); if(p){ commit(); currentPage().pins=currentPage().pins.filter(x=>x.id!==p.id); saveProject(project); renderPins(); renderPinsList(); project._sel=null; updatePinDetails(); } }
+    if(e.key==='Delete'){ const p=selectedPin(); if(p){ commit(); const pg=currentPage(); if(pg){ pg.pins=pg.pins.filter(x=>x.id!==p.id); saveProject(project); renderPins(); renderPinsList(); project._sel=null; updatePinDetails(); } } }
     if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)){
-      const p=selectedPin(); if(!p) return; e.preventDefault(); commit();
+      const p=selectedPin(); if(!p) return; e.preventDefault();
+      commit();
       const delta = project.settings.fieldMode? 0.5 : 0.2;
       if(e.key==='ArrowUp') p.y_pct=Math.max(0,p.y_pct-delta);
       if(e.key==='ArrowDown') p.y_pct=Math.min(100,p.y_pct+delta);
@@ -721,4 +806,20 @@ document.addEventListener('DOMContentLoaded', () => {
       p.lastEdited=Date.now(); saveProject(project); renderPins(); updatePinDetails();
     }
   });
+
+  /***************
+   * Boot        *
+   ***************/
+  projects = loadProjects();
+  const lastId = localStorage.getItem('survey:lastOpenProjectId');
+  if(projects.length){
+    const initial = projects.find(p=>p.id===lastId) || projects[0];
+    project = initial;
+  } else {
+    project = newProject('Untitled Project');
+    projects.push(project);
+    saveProject(project);
+  }
+  renderProjectList();
+  renderAll();
 });
