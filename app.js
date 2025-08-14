@@ -1,6 +1,29 @@
 // app.js
 document.addEventListener('DOMContentLoaded', () => {
   /***********************
+   * Screen navigation
+   ***********************/
+  const screens = {
+    home: document.getElementById('screen-home'),
+    projects: document.getElementById('screen-projects'),
+    editor: document.getElementById('screen-editor'),
+  };
+  const projectsListEl = document.getElementById('projectsList');
+
+  const navHome = document.getElementById('navHome');
+  const navProjects = document.getElementById('navProjects');
+  const navEditor = document.getElementById('navEditor');
+
+  const homeNew = document.getElementById('homeNew');
+  const homeOpen = document.getElementById('homeOpen');
+  const homeEditor = document.getElementById('homeEditor');
+
+  function showScreen(name){
+    Object.values(screens).forEach(s=> s.classList.remove('active'));
+    if(screens[name]) screens[name].classList.add('active');
+  }
+
+  /***********************
    * Helpers & constants *
    ***********************/
   const $ = (id) => document.getElementById(id);
@@ -19,18 +42,14 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   /***********************
-   * Grab DOM references *
+   * Editor DOM references *
    ***********************/
-  // Left column
   const thumbsEl = $('thumbs');
-
-  // Stage
   const stage = $('stage');
   const stageImage = $('stageImage');
   const pinLayer = $('pinLayer');
   const measureSvg = $('measureSvg');
 
-  // Toolbar bits
   const projectLabel = $('projectLabel');
   const inputUpload = $('inputUpload');
   const inputBuilding = $('inputBuilding');
@@ -40,7 +59,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const toggleStrict = $('toggleStrict');
   const toggleField = $('toggleField');
 
-  // Right panel — fields
   const fieldType = $('fieldType');
   const fieldRoomNum = $('fieldRoomNum');
   const fieldRoomName = $('fieldRoomName');
@@ -52,15 +70,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const warnsEl = $('warns');
   const pinList = $('pinList');
 
-  // Photo modal
-  const photoModal = $('photoModal');
-  const photoImg = $('photoImg');
-  const photoMeasureSvg = $('photoMeasureSvg');
-  const photoPinId = $('photoPinId');
-  const photoName = $('photoName');
-  const photoMeaCount = $('photoMeaCount');
-
-  // Top toolbar buttons (by id)
+  // Toolbar buttons
   const btnNew = $('btnNew');
   const btnOpen = $('btnOpen');
   const btnSaveAs = $('btnSaveAs');
@@ -87,7 +97,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnDuplicate = $('btnDuplicate');
   const btnDelete = $('btnDelete');
 
-  // Photo modal buttons
+  // Photo modal
+  const photoModal = $('photoModal');
+  const photoImg = $('photoImg');
+  const photoMeasureSvg = $('photoMeasureSvg');
+  const photoPinId = $('photoPinId');
+  const photoName = $('photoName');
+  const photoMeaCount = $('photoMeaCount');
   const btnPhotoClose = $('btnPhotoClose');
   const btnPhotoMeasure = $('btnPhotoMeasure');
   const btnPhotoCalib = $('btnPhotoCalib');
@@ -107,27 +123,26 @@ document.addEventListener('DOMContentLoaded', () => {
   const REDO = [];
   const MAX_UNDO = 50;
 
-  // Ephemeral context (for default building/level when adding)
   const projectContext = { building:'', level:'' };
 
-  // Stage interaction state
+  // Stage interactions
   let addingPin = false;
-  let dragging = null;        // HTMLElement of the pin being dragged
-  let dragData = null;        // {startX, startY, startPctX, startPctY}
+  let dragging = null;        // pin element
+  let dragData = null;        // geometry
   let measureMode = false;
   let calibFirst = null;
-  let measureFirst = null;    // main view measurement temp start
+  let measureFirst = null;
   let fieldMode = false;
   let calibAwait = null;      // 'main' | 'photo'
 
-  // Photo modal state
+  // Photo state
   const photoState = { pin:null, idx:0, measure:false, calib:null };
-  let photoMeasureFirst = null;          // photo measurement start
-  let photoRubberLine = null;            // SVG line element for rubber band
-  let mainRubberLine = null;             // SVG line element in main view
+  let photoMeasureFirst = null;
+  let photoRubberLine = null;
+  let mainRubberLine = null;
 
   /*******************
-   * Small utilities *
+   * Utilities
    *******************/
   function id(){ return Math.random().toString(36).slice(2,10); }
   function fix(n){ return typeof n==='number'? +Number(n||0).toFixed(3):''; }
@@ -183,7 +198,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   /*********************
-   * Data model helpers *
+   * Data model
    *********************/
   function newProject(name){
     return {
@@ -209,7 +224,7 @@ document.addEventListener('DOMContentLoaded', () => {
       level: inputLevel.value || projectContext.level || '',
       x_pct: x_pct,
       y_pct: y_pct,
-      custom_name: '',       // allow user-defined name
+      custom_name: '',
       notes: '',
       photos: [],
       lastEdited: Date.now()
@@ -235,6 +250,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if(!project) return;
     localStorage.setItem('survey:lastOpenProjectId', pid);
     renderAll();
+    renderProjectsList(); // keep projects list fresh
   }
   function saveProject(p){
     p.updatedAt=Date.now();
@@ -289,7 +305,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   /****************
-   * Render funcs *
+   * Rendering
    ****************/
   function renderAll(){
     renderTypeOptionsOnce();
@@ -306,7 +322,6 @@ document.addEventListener('DOMContentLoaded', () => {
   let _typesFilled = false;
   function renderTypeOptionsOnce(){
     if(_typesFilled) return;
-    // Add "Custom..." option at top for free text entry via prompt
     const customOpt = document.createElement('option');
     customOpt.value = '__CUSTOM__';
     customOpt.textContent = 'Custom (type your own)…';
@@ -363,9 +378,9 @@ document.addEventListener('DOMContentLoaded', () => {
       el.textContent=label;
       el.style.left=p.x_pct+'%';
       el.style.top=p.y_pct+'%';
-      el.style.background=SIGN_TYPES[p.sign_type]||'#22c55e'; // default Southwood-green
-      el.style.padding = fieldMode? '.28rem .5rem' : '.18rem .35rem';
-      el.style.fontSize= fieldMode? '0.9rem' : '0.75rem';
+      el.style.background=SIGN_TYPES[p.sign_type]||'#22c55e';
+      el.style.padding = fieldMode? '.28rem .5rem' : '.2rem .45rem';
+      el.style.fontSize= fieldMode? '0.9rem' : '0.8rem';
       pinLayer.appendChild(el);
 
       // Dragging
@@ -375,14 +390,10 @@ document.addEventListener('DOMContentLoaded', () => {
         dragging = el;
         const rect=stageImage.getBoundingClientRect();
         dragData = {
-          startX: e.clientX,
-          startY: e.clientY,
           rectLeft: rect.left,
           rectTop: rect.top,
           rectW: rect.width,
-          rectH: rect.height,
-          startPctX: p.x_pct,
-          startPctY: p.y_pct
+          rectH: rect.height
         };
         el.setPointerCapture?.(e.pointerId);
       });
@@ -473,7 +484,6 @@ document.addEventListener('DOMContentLoaded', () => {
   function toggleMeasuring(scope){
     measureMode=!measureMode;
     if(scope==='main') btnMeasureToggle.textContent = 'Measuring: '+(measureMode?'ON':'OFF');
-    // clear rubber line if turning off
     if(!measureMode && mainRubberLine){ measureSvg.removeChild(mainRubberLine); mainRubberLine=null; }
   }
   function resetMeasurements(scope){
@@ -496,8 +506,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   on(stage,'pointermove',(e)=>{
     if(measureMode && measureFirst){
-      // update rubber band in main view
-      const a = toLocalPoint(measureFirst);
+      const a = { x: measureFirst.x, y: measureFirst.y };
       const b = toLocal(e);
       if(!mainRubberLine){
         mainRubberLine = ensureRubberLine(measureSvg);
@@ -524,7 +533,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if(measureMode){
       if(!measureFirst){ measureFirst = { x: pt.x, y: pt.y }; return; }
-      // finalize measurement
       const start = measureFirst;
       const end = pt;
       if(mainRubberLine){ measureSvg.removeChild(mainRubberLine); mainRubberLine=null; }
@@ -551,8 +559,6 @@ document.addEventListener('DOMContentLoaded', () => {
       drawMeasurements();
     }
   });
-
-  function toLocalPoint(pt){ return {x: pt.x, y: pt.y}; }
 
   function drawMeasurements(){
     const page=currentPage();
@@ -591,7 +597,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const p=selectedPin(); if(!p) { alert('Select a pin first.'); return; }
     if(!p.photos.length) { alert('No photos attached.'); return; }
     photoState.pin=p; photoState.idx=0; showPhoto(); photoModal.style.display='flex';
-    // allow scroll inside the viewer if large image
     const viewer = photoModal.querySelector('.viewer');
     if(viewer) viewer.style.overflow = 'auto';
   }
@@ -635,7 +640,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Rubber band in photo view
   on(photoImg,'pointermove',(e)=>{
     if(!photoState.measure || !photoMeasureFirst) return;
     const rect = photoImg.getBoundingClientRect();
@@ -656,7 +660,7 @@ document.addEventListener('DOMContentLoaded', () => {
     btnPhotoMeasure.textContent='Measure: '+(photoState.measure?'ON':'OFF');
     if(!photoState.measure && photoRubberLine){ photoMeasureSvg.removeChild(photoRubberLine); photoRubberLine=null; photoMeasureFirst=null; }
   });
-  on(btnPhotoCalib,'click',()=>{ photoState.calib=null; alert('Photo calibration: click two points on the image, then enter real feet.'); });
+  on(btnPhotoCalib,'click',()=>{ photoState.calib=null; alert('Photo calibration: click two points on the image, then enter feet.'); });
 
   on(btnPhotoPrev,'click',()=>{ if(!photoState.pin) return; photoState.idx=Math.max(0,photoState.idx-1); showPhoto(); });
   on(btnPhotoNext,'click',()=>{ if(!photoState.pin) return; photoState.idx=Math.min(photoState.pin.photos.length-1,photoState.idx+1); showPhoto(); });
@@ -674,21 +678,16 @@ document.addEventListener('DOMContentLoaded', () => {
     downloadFile(ph.name || 'photo.png', dataURLtoBlob(ph.dataUrl));
   });
 
-  // Calibrate or measure click handling on photo overlay SVG
   on(photoMeasureSvg,'click',(e)=>{
     const ph = photoState.pin?.photos[photoState.idx]; if(!ph) return;
     const rect = photoImg.getBoundingClientRect();
     const pt = { x: e.clientX-rect.left, y:e.clientY-rect.top };
 
-    // Calibration clicks
-    if(photoState.calib===null && btnPhotoCalib){ /* waiting to start */ }
     if(photoState.calib===null && e.isTrusted){
-      // first calibration point
       photoState.calib = { x: pt.x, y: pt.y };
       return;
     }
-    if(photoState.calib && !photoState.measureTmp){
-      // second calibration point
+    if(photoState.calib){
       const px = Math.hypot(photoState.calib.x-pt.x, photoState.calib.y-pt.y);
       const ft = parseFloat(prompt('Enter real distance (feet) for calibration:', '10')) || 10;
       ph.measurements = ph.measurements || [];
@@ -709,8 +708,6 @@ document.addEventListener('DOMContentLoaded', () => {
       photoMeasureFirst = { x: pt.x, y: pt.y };
       return;
     }
-
-    // finalize a measurement on photo
     const start = photoMeasureFirst;
     const end = pt;
     if(photoRubberLine){ photoMeasureSvg.removeChild(photoRubberLine); photoRubberLine=null; }
@@ -737,7 +734,7 @@ document.addEventListener('DOMContentLoaded', () => {
     ph.measurements.push(m);
     photoMeasureFirst=null;
     drawPhotoMeasurements();
-    photoMeaCount.textContent = ph.measurements.length.toString();
+    photoMeaCount.textContent = String(ph.measurements.length);
   });
 
   /****************
@@ -786,7 +783,6 @@ document.addEventListener('DOMContentLoaded', () => {
   async function exportZIP(){
     const rows=toRows(); const zip=new JSZip();
     zip.file('signage.csv', [Object.keys(rows[0]||{}).join(','), ...rows.map(r=>Object.values(r).map(v=>csvEscape(v)).join(','))].join('\n'));
-    // photos
     project.pages.forEach(pg=>{
       (pg.pins||[]).forEach(pin=>{
         (pin.photos||[]).forEach((ph, idx)=>{
@@ -814,53 +810,69 @@ document.addEventListener('DOMContentLoaded', () => {
       p.building=row.building||'';
       p.level=row.level||'';
       p.notes=row.notes||'';
-      currentPage().pins.push(p);
+      const pg=currentPage(); if(pg) pg.pins.push(p);
     }
     saveProject(project); renderPins(); renderPinsList(); alert('Imported rows into current page.');
   }
 
   /***********************
-   * Toolbar wiring, etc *
+   * Toolbar wiring & nav
    ***********************/
-  // Project storage init
   projects = loadProjects();
   currentProjectId = localStorage.getItem('survey:lastOpenProjectId') || null;
   project = currentProjectId ? projects.find(p=>p.id===currentProjectId) : null;
   if(!project){ project = newProject('Untitled Project'); saveProject(project); }
   selectProject(project.id);
 
-  // Simple Project Switcher overlay (no index change)
-  function openProjectSwitcher(){
-    const overlay=document.createElement('div');
-    overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;z-index:9999;';
-    const box=document.createElement('div');
-    box.style.cssText='background:#0f1733;border:1px solid #2b3566;border-radius:12px;min-width:360px;max-width:90vw;max-height:80vh;overflow:auto;padding:12px;';
-    const title=document.createElement('div');
-    title.textContent='Open Project'; title.style.cssText='font-weight:700;margin-bottom:8px;';
-    const list=document.createElement('div');
+  function renderProjectsList(){
+    projectsListEl.innerHTML = '';
     projects.forEach(p=>{
-      const item=document.createElement('div');
-      item.textContent=`${p.name}  (${new Date(p.updatedAt).toLocaleString()})`;
-      item.style.cssText='padding:8px;border:1px solid #2b3566;border-radius:8px;margin:6px 0;cursor:pointer;background:#121a3b;';
-      item.onclick=()=>{ selectProject(p.id); document.body.removeChild(overlay); };
-      list.appendChild(item);
+      const row = document.createElement('div');
+      row.className = 'project-item';
+      const left = document.createElement('div');
+      left.innerHTML = `<div><strong>${p.name}</strong></div><div class="meta">Updated ${new Date(p.updatedAt).toLocaleString()}</div>`;
+      const actions = document.createElement('div');
+      const openBtn = document.createElement('button'); openBtn.textContent = 'Open';
+      const dupBtn = document.createElement('button'); dupBtn.textContent = 'Duplicate';
+      const delBtn = document.createElement('button'); delBtn.textContent = 'Delete';
+      openBtn.onclick = ()=>{ selectProject(p.id); showScreen('editor'); };
+      dupBtn.onclick = ()=>{
+        const name = prompt('Duplicate as name:', p.name+' (copy)'); if(!name) return;
+        const copy = JSON.parse(JSON.stringify(p)); copy.id=id(); copy.name=name; copy.createdAt=Date.now(); copy.updatedAt=Date.now();
+        projects.push(copy); localStorage.setItem('survey:projects', JSON.stringify(projects)); renderProjectsList();
+      };
+      delBtn.onclick = ()=>{
+        if(!confirm('Delete this project?')) return;
+        projects = projects.filter(x=>x.id!==p.id);
+        localStorage.setItem('survey:projects', JSON.stringify(projects));
+        if(project && project.id===p.id){
+          if(projects[0]) selectProject(projects[0].id);
+        }
+        renderProjectsList();
+      };
+      actions.appendChild(openBtn); actions.appendChild(dupBtn); actions.appendChild(delBtn);
+      row.appendChild(left); row.appendChild(actions);
+      projectsListEl.appendChild(row);
     });
-    const newBtn=document.createElement('button');
-    newBtn.textContent='New Project';
-    newBtn.style.cssText='margin-top:8px;';
-    newBtn.onclick=()=>{
-      const name=prompt('New project name?','New Project'); if(!name) return;
-      commit(); const np=newProject(name); saveProject(np); selectProject(np.id); document.body.removeChild(overlay);
-    };
-    box.appendChild(title); box.appendChild(list); box.appendChild(newBtn);
-    overlay.appendChild(box);
-    overlay.addEventListener('click',(e)=>{ if(e.target===overlay) document.body.removeChild(overlay); });
-    document.body.appendChild(overlay);
   }
+  renderProjectsList();
 
-  // Toolbar handlers
+  // Top nav
+  on(navHome, ()=> showScreen('home'));
+  on(navProjects, ()=> { renderProjectsList(); showScreen('projects'); });
+  on(navEditor, ()=> showScreen('editor'));
+
+  // Home buttons
+  on(homeNew, ()=>{
+    const name=prompt('New project name?','New Project'); if(!name) return;
+    commit(); const p=newProject(name); saveProject(p); selectProject(p.id); showScreen('editor');
+  });
+  on(homeOpen, ()=> { renderProjectsList(); showScreen('projects'); });
+  on(homeEditor, ()=> showScreen('editor'));
+
+  // Toolbar actions
   on(btnNew,'click',()=>{ const name=prompt('New project name?','New Project'); if(!name) return; commit(); const p=newProject(name); saveProject(p); selectProject(p.id); });
-  on(btnOpen,'click',openProjectSwitcher);
+  on(btnOpen,'click',()=>{ renderProjectsList(); showScreen('projects'); });
   on(btnSaveAs,'click',()=>{ const name=prompt('Duplicate as name:', project.name+' (copy)'); if(!name) return; commit(); const copy=JSON.parse(JSON.stringify(project)); copy.id=id(); copy.name=name; copy.createdAt=Date.now(); copy.updatedAt=Date.now(); saveProject(copy); selectProject(copy.id); });
   on(btnRename,'click',()=>{ const name=prompt('Rename project:', project.name); if(!name) return; commit(); project.name=name; saveProject(project); renderProjectLabel(); });
 
@@ -883,25 +895,21 @@ document.addEventListener('DOMContentLoaded', () => {
     const f=e.target.files && e.target.files[0]; if(!f) return; const text=await f.text(); importCSV(text);
   });
 
-  // Pin CRUD & fields
+  // Pin actions
   on(btnClearPins,'click',()=>{ if(!confirm('Clear ALL pins on this page?')) return; commit(); const pg=currentPage(); if(pg){ pg.pins=[]; } renderAll(); });
   on(btnAddPin,'click',()=>{ addingPin=!addingPin; btnAddPin.classList.toggle('ok', addingPin); });
 
-  // Custom type via fieldType
   on(fieldType,'change',()=>{
     const pin = selectedPin(); if(!pin) return;
     if(fieldType.value==='__CUSTOM__'){
       const val = prompt('Enter custom pin name (label):','');
       if(val && val.trim()){
         pin.custom_name = val.trim();
-        if(!pin.sign_type) pin.sign_type = ''; // keep sign_type empty if purely custom
+        if(!pin.sign_type) pin.sign_type = '';
       }
-      // reset dropdown to blank (or keep previous)
       fieldType.value = pin.sign_type || '';
     } else {
       pin.sign_type = fieldType.value || '';
-      // clear custom name if switching back to a known type (optional)
-      // pin.custom_name = '';
     }
     pin.lastEdited = Date.now(); saveProject(project); renderPins(); renderPinsList(); updatePinDetails();
   });
@@ -941,7 +949,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if(!confirm('Delete selected pin?')) return; commit();
     const pg=currentPage(); if(!pg) return;
     pg.pins=pg.pins.filter(x=>x.id!==pin.id);
-    saveProject(project); renderPins(); renderPinsList(); clearSelection();
+    saveProject(project); renderPins(); renderPinsList(); project._sel=null; updatePinDetails();
   });
 
   on(toggleStrict,'change',()=>{ project.settings.strictRules = !!toggleStrict.checked; saveProject(project); renderWarnings(); });
@@ -951,7 +959,7 @@ document.addEventListener('DOMContentLoaded', () => {
   on(inputSearch,'input',()=> renderPinsList());
   on(filterType,'change',()=> renderPins());
 
-  // Stage interactions: add pin & dragging
+  // Stage add & dragging
   on(stage,'pointerdown',(e)=>{
     if(!addingPin) return;
     if(e.target && e.target.classList && e.target.classList.contains('pin')) return;
@@ -963,7 +971,6 @@ document.addEventListener('DOMContentLoaded', () => {
     addingPin=false; btnAddPin.classList.remove('ok');
   });
 
-  // Global dragging listeners (document-level)
   document.addEventListener('pointermove', (e)=>{
     if(!dragging || !dragData) return;
     e.preventDefault();
@@ -991,12 +998,10 @@ document.addEventListener('DOMContentLoaded', () => {
     dragging=null; dragData=null;
   });
 
-  // Measuring toolbar
+  // Measure toolbar
   on(btnCalibrate,'click',()=> startCalibration('main'));
   on(btnMeasureToggle,'click',()=> toggleMeasuring('main'));
   on(btnMeasureReset,'click',()=> resetMeasurements('main'));
-
-  function clearSelection(){ project._sel=null; saveProject(project); updatePinDetails(); }
 
   // Undo/Redo
   function snapshot(){ return JSON.stringify(project); }
@@ -1010,15 +1015,14 @@ document.addEventListener('DOMContentLoaded', () => {
   function commit(){ UNDO.push(snapshot()); if(UNDO.length>MAX_UNDO) UNDO.shift(); REDO.length=0; }
   function undo(){ if(!UNDO.length) return; REDO.push(snapshot()); const s=UNDO.pop(); loadSnapshot(s); renderAll(); }
   function redo(){ if(!REDO.length) return; UNDO.push(snapshot()); const s=REDO.pop(); loadSnapshot(s); renderAll(); }
-
   on(btnUndo,'click',undo);
   on(btnRedo,'click',redo);
 
-  // Keyboard shortcuts
+  // Shortcuts
   window.addEventListener('keydown',(e)=>{
     if((e.ctrlKey||e.metaKey) && !e.shiftKey && e.key.toLowerCase()==='z'){ e.preventDefault(); undo(); }
     if((e.ctrlKey||e.metaKey) && e.shiftKey && e.key.toLowerCase()==='z'){ e.preventDefault(); redo(); }
-    if(e.key==='Delete'){ const p=selectedPin(); if(p){ commit(); const pg=currentPage(); if(pg){ pg.pins=pg.pins.filter(x=>x.id!==p.id); } saveProject(project); renderPins(); renderPinsList(); clearSelection(); } }
+    if(e.key==='Delete'){ const p=selectedPin(); if(p){ commit(); const pg=currentPage(); if(pg){ pg.pins=pg.pins.filter(x=>x.id!==p.id); } saveProject(project); renderPins(); renderPinsList(); project._sel=null; updatePinDetails(); } }
     if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)){
       const p=selectedPin(); if(!p) return; e.preventDefault(); commit();
       const delta = project.settings.fieldMode? 0.5 : 0.2;
@@ -1035,6 +1039,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const ro=new ResizeObserver(()=>{
     measureSvg.setAttribute('width', stage.clientWidth);
     measureSvg.setAttribute('height', stage.clientHeight);
-  }); 
+  });
   if(stage) ro.observe(stage);
 });
