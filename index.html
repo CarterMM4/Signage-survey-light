@@ -3,101 +3,98 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Signage Survey</title>
+  <title>Southwood Signage Survey</title>
 
-  <!-- Southwood-ish palette -->
+  <!-- Look & Feel -->
   <style>
     :root{
-      --bg:#0b1020; --panel:#11162a; --soft:#141c3a;
-      --text:#e8edf9; --muted:#aab3cc;
-      --accent:#22c55e; /* Southwood green */
-      --accent-2:#4cc9f0;
-      --border:#263056;
-      --warn:#f59e0b; --err:#ef4444; --ok:#22c55e;
+      --bg:#0b1020;           /* background */
+      --panel:#101732;        /* panels */
+      --soft:#121b3a;
+      --text:#e8ecf9;
+      --muted:#a5b1d8;
+      --line:#24315d;
+      --accent:#2ecc71;       /* Southwood green */
+      --accent-2:#44d983;     /* lighter green */
+      --warn:#f59e0b;
+      --err:#ef4444;
+      --blue:#4cc9f0;
     }
+    *{box-sizing:border-box}
     html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
-    a{color:var(--accent)}
-    button{background:#18224a;border:1px solid var(--border);color:var(--text);padding:.6rem .9rem;border-radius:10px;cursor:pointer}
-    button:hover{background:#1f2a58}
-    input,select{background:#0e1631;border:1px solid var(--border);color:var(--text);padding:.5rem .6rem;border-radius:10px}
-    .hidden{display:none}
-
-    /* Top app bar */
-    .topbar{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:.5rem;padding:.6rem .9rem;background:linear-gradient(180deg,#0e1734,#0b122b);border-bottom:1px solid var(--border)}
-    .brand{display:flex;align-items:center;gap:.6rem;font-weight:800;letter-spacing:.4px}
-    .brand .dot{width:14px;height:14px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 3px rgba(34,197,94,.2)}
-    .nav{margin-left:auto;display:flex;gap:.4rem}
-    .nav button{padding:.45rem .7rem}
+    a{color:var(--accent);text-decoration:none}
+    a:hover{text-decoration:underline}
+    button{background:#17224a;border:1px solid var(--line);color:var(--text);padding:.6rem .9rem;border-radius:10px;cursor:pointer}
+    button:hover{background:#1d2a5a}
+    .btn-primary{background:linear-gradient(180deg, var(--accent), var(--accent-2)); color:#03210e; border:0;}
+    .btn-primary:hover{filter:brightness(1.05)}
+    input,select{background:#0f1736;border:1px solid var(--line);color:var(--text);padding:.55rem .65rem;border-radius:10px}
+    .pill{display:inline-flex;align-items:center;gap:.4rem;background:#0e1634;border:1px solid var(--line);padding:.35rem .6rem;border-radius:999px}
+    .app{display:grid;grid-template-rows:auto 1fr; height:100%}
+    header.appbar{display:flex;align-items:center;gap:1rem;padding:.7rem 1rem;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#0f1633,#0c132a)}
+    header .brand{display:flex;align-items:center;gap:.7rem;font-weight:700;letter-spacing:.4px}
+    header .dot{width:14px;height:14px;border-radius:999px;background:var(--accent);box-shadow:0 0 0 3px rgba(46,204,113,.25)}
+    header .spacer{flex:1}
+    main{height:100%;overflow:auto}
 
     /* Screens */
-    .screen{display:none;min-height:calc(100vh - 56px)}
-    .screen.active{display:block}
+    .screen{display:none;padding:1rem;max-width:1200px;margin:0 auto}
+    .screen.show{display:block}
 
     /* Home */
-    .home{display:grid;place-items:center;padding:6vw}
-    .hero{max-width:900px;text-align:center;padding:48px;background:linear-gradient(180deg,#0e1633,#0b1129);border:1px solid var(--border);border-radius:18px;box-shadow:0 10px 40px rgba(0,0,0,.35)}
-    .hero h1{margin:.2rem 0 0;font-size:2.1rem}
-    .hero p{color:var(--muted);margin:.6rem auto 1.2rem;max-width:680px}
-    .cta{display:flex;gap:.6rem;justify-content:center;flex-wrap:wrap}
-    .btn-accent{background:var(--accent);border-color:#1e8e4a;color:#07130d}
-    .btn-accent:hover{filter:brightness(1.05)}
+    .hero{display:grid;grid-template-columns:1.2fr .8fr;gap:2rem;align-items:center;margin-top:2rem}
+    .hero h1{margin:.2rem 0 0 0;font-size:2rem}
+    .hero p{color:var(--muted)}
+    .hero .panel{background:var(--panel);border:1px solid var(--line);padding:1rem;border-radius:16px}
 
     /* Projects */
-    .projects{padding:1rem}
-    .project-list{display:grid;gap:.6rem;max-width:880px;margin:0 auto}
-    .project-item{display:flex;justify-content:space-between;align-items:center;background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:.7rem .9rem}
-    .project-item .meta{color:var(--muted);font-size:.9rem}
-
-    /* Editor layout (original app) */
-    .app-wrap{display:grid;grid-template-rows:auto 1fr; height:calc(100vh - 56px)}
-    .toolbar{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;padding:.6rem .8rem;background:linear-gradient(180deg,#111936,#0d142d);border-bottom:1px solid var(--border);position:sticky;top:56px;z-index:10}
-    .toolbar .group{display:flex;gap:.4rem;align-items:center;background:#101938;border:1px solid var(--border);border-radius:10px;padding:.35rem .45rem}
-    .pill{display:inline-flex;gap:.35rem;align-items:center;padding:.25rem .5rem;border-radius:999px;border:1px solid var(--border);background:#0e1634;color:#c5d0ff;font-size:.8rem}
-    .layout{display:grid;grid-template-columns:230px 1fr 340px; gap:.75rem; padding:.75rem; height:100%; box-sizing:border-box}
-    .panel{background:var(--panel); border:1px solid var(--border); border-radius:14px; overflow:hidden; display:flex;flex-direction:column; min-height:0}
-    .panel h3{margin:0;padding:.6rem .75rem;border-bottom:1px solid var(--border);background:#121938;font-size:.95rem;color:#d6e2ff}
-    .thumbs{padding:.5rem;overflow:auto;display:grid;gap:.5rem}
-    .thumb{background:#0f1733;border:1px solid var(--border);border-radius:10px;padding:.35rem;cursor:pointer}
-    .thumb.active{outline:2px solid var(--accent)}
-    .thumb img{width:100%;height:110px;object-fit:cover;border-radius:6px;background:#060a18}
-    .thumb input{width:100%;margin-top:.35rem;font-size:.8rem}
-    .stage{position:relative; background:#0a0f22; border-radius:14px; border:1px dashed #2b3562; display:flex; align-items:center; justify-content:center; overflow:hidden}
-    .stage-inner{position:relative; width:100%; height:100%; display:flex; align-items:center; justify-content:center}
-    #stageImage{max-width:100%; max-height:100%; display:block}
-    #pinLayer{position:absolute; inset:0; pointer-events:none}
-    .pin{position:absolute; transform:translate(-50%, -100%); padding:.2rem .45rem; font-size:.8rem; border-radius:999px; border:1px solid rgba(0,0,0,.35); color:#0b0f1d; font-weight:800; box-shadow:0 3px 10px rgba(0,0,0,.35); pointer-events:auto}
-    .pin.selected{outline:2px solid #fff}
-    .measure{position:absolute; pointer-events:none}
-    .measure line{stroke-width:3}
-    .measure text{fill:#fff; font-size:12px; paint-order:stroke; stroke:#000; stroke-width:3}
-    .right{padding:0; overflow:auto}
-    .section{padding:.6rem .75rem; border-bottom:1px solid var(--border)}
-    .grid{display:grid; grid-template-columns: 1fr 1fr; gap:.5rem}
-    .row{display:grid; grid-template-columns:110px 1fr; gap:.5rem; align-items:center; margin:.35rem 0}
-    .list{max-height:280px; overflow:auto; display:grid; gap:.35rem}
-    .list .item{display:grid; grid-template-columns:20px 1fr auto; align-items:center; gap:.5rem; padding:.35rem .45rem; border:1px solid var(--border); border-radius:10px; background:#0e1634}
+    .toolbar{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;margin:.8rem 0}
+    .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:.8rem}
+    .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:.8rem;display:flex;flex-direction:column;gap:.5rem}
+    .card h4{margin:0}
+    .row{display:flex;gap:.5rem;align-items:center}
     .muted{color:var(--muted)}
-    .ok{color:var(--ok)}
-    .footer-note{font-size:.8rem;color:#93a2d8;padding:.5rem .75rem}
 
-    /* Modal */
-    .modal{position:fixed; inset:0; background:rgba(0,0,0,.6); display:none; align-items:center; justify-content:center; z-index:200}
-    .modal .box{background:#0f1733; border:1px solid #2b3566; border-radius:14px; width:min(960px,95vw); height:min(85vh,95vh); display:flex; flex-direction:column}
-    .modal .box header{display:flex; justify-content:space-between; align-items:center; padding:.6rem .9rem; border-bottom:1px solid #2b3566}
-    .modal .box main{flex:1; display:grid; grid-template-columns: 1fr 300px}
-    .modal .viewer{position:relative; background:#060a18; display:flex; align-items:center; justify-content:center; overflow:auto}
-    .modal .viewer img{max-width:none; height:auto}
-    .modal .side{border-left:1px solid #2b3566; padding:.6rem}
-    .chips{display:flex; flex-wrap:wrap; gap:.35rem}
-    .tag{font-size:.75rem; padding:.15rem .45rem; border-radius:999px; background:#18224a; border:1px solid #2b3566}
+    /* Editor */
+    .layout{display:grid;grid-template-columns:230px 1fr 340px;gap:.8rem;min-height:calc(100vh - 64px);padding-bottom:1rem}
+    .panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden;display:flex;flex-direction:column;min-height:0}
+    .panel h3{margin:0;padding:.6rem .8rem;border-bottom:1px solid var(--line);background:#11183a;color:#c7d4ff;font-size:.95rem}
+    .thumbs{padding:.6rem;overflow:auto;display:grid;gap:.6rem}
+    .thumb{border:1px solid var(--line);border-radius:12px;background:#0f1733;padding:.4rem;cursor:pointer}
+    .thumb.active{outline:2px solid var(--accent)}
+    .thumb img{width:100%;height:110px;object-fit:cover;border-radius:8px;background:#061023}
+    .thumb input{width:100%;margin-top:.35rem}
+
+    .stage{position:relative;border:1px dashed #2b3562;border-radius:14px;background:#081229;display:flex;align-items:center;justify-content:center;overflow:auto;min-height:400px}
+    .stage-inner{position:relative;min-width:60%;min-height:60%;display:flex;align-items:center;justify-content:center}
+    #stageImage{max-width:100%;max-height:100%;display:block}
+    #pinLayer{position:absolute;inset:0;pointer-events:none}
+    .pin{position:absolute;transform:translate(-50%,-100%);padding:.22rem .45rem;font-size:.78rem;border-radius:999px;border:1px solid rgba(0,0,0,.35);color:#05121a;font-weight:800;box-shadow:0 3px 10px rgba(0,0,0,.35);pointer-events:auto}
+    .pin.selected{outline:2px solid #fff}
+    .measure{position:absolute;pointer-events:none;inset:0}
+    .help{font-size:.85rem;color:var(--muted)}
+    .chips{display:flex;flex-wrap:wrap;gap:.35rem}
+    .tag{font-size:.75rem;padding:.18rem .5rem;border-radius:999px;background:#18224a;border:1px solid var(--line)}
+
+    /* Photo modal */
+    .modal{position:fixed;inset:0;background:rgba(0,0,0,.65);display:none;align-items:center;justify-content:center;z-index:50}
+    .modal.show{display:flex}
+    .modal .box{background:#0f1733;border:1px solid var(--line);border-radius:14px;width:min(1000px,95vw);height:min(85vh,95vh);display:flex;flex-direction:column}
+    .modal header{display:flex;justify-content:space-between;align-items:center;padding:.6rem .9rem;border-bottom:1px solid var(--line)}
+    .modal main{flex:1;display:grid;grid-template-columns:1fr 300px;min-height:0}
+    .viewer{position:relative;background:#060b18;display:flex;align-items:center;justify-content:center;overflow:auto}
+    .viewer img{max-width:100%;max-height:100%}
+    .side{border-left:1px solid var(--line);padding:.6rem;overflow:auto}
+
+    .green{color:var(--accent)}
+    .spaced{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap}
   </style>
 
-  <!-- Libraries -->
+  <!-- Optional libs already wired (use if you export/import/etc later) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.1.0/tesseract.min.js"></script>
   <script>
     if (window['pdfjsLib']) {
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
@@ -105,85 +102,66 @@
   </script>
 </head>
 <body>
-  <!-- Top bar -->
-  <div class="topbar">
-    <div class="brand"><span class="dot"></span>Signage Survey</div>
-    <div class="nav">
+  <div class="app">
+    <header class="appbar">
+      <div class="brand">
+        <span class="dot"></span>
+        Southwood Signage Survey
+      </div>
+      <div class="spacer"></div>
       <button id="navHome">Home</button>
       <button id="navProjects">Projects</button>
-      <button id="navEditor">Editor</button>
-    </div>
-  </div>
+      <button id="navEditor" class="btn-primary">Editor</button>
+    </header>
 
-  <!-- Screens -->
-  <section id="screen-home" class="screen home active">
-    <div class="hero">
-      <h1>Map, Measure, and Manage Signage</h1>
-      <p>Drop pins on floor plans, attach photos, measure with calibration, and export clean reports. Built for fast field work and tidy handoffs.</p>
-      <div class="cta">
-        <button id="homeNew" class="btn-accent">New Project</button>
-        <button id="homeOpen">Open Project</button>
-        <button id="homeEditor">Go to Editor</button>
+    <!-- HOME -->
+    <main id="screenHome" class="screen show">
+      <div class="hero">
+        <div>
+          <h1>Welcome 👋</h1>
+          <p>Plan, pin, photo, &amp; measure — all in one tidy place. Click <strong class="green">Projects</strong> to open or create a project, then jump into the <strong class="green">Editor</strong>.</p>
+          <div class="spaced" style="margin:1rem 0 0">
+            <button id="homeNew" class="btn-primary">Create New Project</button>
+            <button id="homeOpen">Open Projects</button>
+          </div>
+        </div>
+        <div class="panel">
+          <h3 style="margin:0 0 .6rem 0;">Quick tips</h3>
+          <div class="help">
+            <div>• Drag pins to move them. Double-click a pin to open its photos.</div>
+            <div>• Measurements show a live preview. Release, then enter your field measurement.</div>
+            <div>• You can add custom sign names — not just the dropdown.</div>
+          </div>
+        </div>
       </div>
-    </div>
-  </section>
+    </main>
 
-  <section id="screen-projects" class="screen projects">
-    <div class="project-list" id="projectsList"></div>
-  </section>
-
-  <section id="screen-editor" class="screen">
-    <div class="app-wrap">
-      <!-- Toolbar -->
+    <!-- PROJECTS -->
+    <main id="screenProjects" class="screen">
       <div class="toolbar">
-        <div class="group">
-          <button id="btnNew">New Project</button>
-          <button id="btnOpen">Open Project</button>
-          <button id="btnSaveAs">Save As…</button>
-          <button id="btnRename">Rename Project</button>
+        <button id="btnCreateProj" class="btn-primary">New Project</button>
+        <input id="projSearch" placeholder="Search projects…" style="min-width:260px"/>
+      </div>
+      <div id="projectsGrid" class="cards"></div>
+    </main>
+
+    <!-- EDITOR -->
+    <main id="screenEditor" class="screen">
+      <div class="toolbar">
+        <span id="projectLabel" class="muted">—</span>
+        <span class="spacer"></span>
+        <div class="spaced">
+          <span class="pill">Building <input id="inputBuilding" style="width:120px" placeholder="A"></span>
+          <span class="pill">Level <input id="inputLevel" style="width:80px" placeholder="1"></span>
+          <input id="inputUpload" type="file" class="hidden" accept="image/*,application/pdf" multiple />
+          <button id="btnUpload" class="btn-primary">Upload Page(s)</button>
         </div>
-        <div class="group">
-          <input type="file" id="inputUpload" accept="image/*,application/pdf" multiple class="hidden" />
-          <button id="btnUpload">Upload Map / Plan</button>
-          <label class="pill">Building <input id="inputBuilding" style="width:120px" placeholder="A"/></label>
-          <label class="pill">Level <input id="inputLevel" style="width:80px" placeholder="1"/></label>
-        </div>
-        <div class="group">
-          <button id="btnExportCSV">Export CSV</button>
-          <button id="btnExportXLSX">Export Excel</button>
-          <button id="btnExportZIP">Export ZIP (+photos)</button>
-          <input type="file" id="inputImportCSV" accept="text/csv" class="hidden" />
-          <button id="btnImportCSV">Import CSV</button>
-        </div>
-        <div class="group">
-          <button id="btnOCR">OCR this View</button>
-          <button id="btnCalibrate">Calibrate Scale</button>
-          <button id="btnMeasureToggle">Measuring: OFF</button>
-          <button id="btnMeasureReset">Reset Measure</button>
-        </div>
-        <div class="group">
-          <button id="btnUndo">Undo</button>
-          <button id="btnRedo">Redo</button>
-        </div>
-        <div class="group">
-          <input id="inputSearch" placeholder="Search…" style="width:180px"/>
-          <select id="filterType"><option value="">All Types</option></select>
-          <label class="pill"><input type="checkbox" id="toggleStrict"> Auto-normalize rules</label>
-          <label class="pill"><input type="checkbox" id="toggleField"> Field Mode</label>
-        </div>
-        <div class="group">
-          <button id="btnClearPins">Clear All Pins</button>
-          <button id="btnAddPin">Add Pin</button>
-        </div>
-        <div class="muted" id="projectLabel" style="margin-left:auto">—</div>
       </div>
 
-      <!-- Layout -->
       <div class="layout">
         <div class="panel">
           <h3>Pages</h3>
-          <div class="thumbs" id="thumbs"></div>
-          <div class="footer-note">Tip: Click a page to switch. Rename under each thumbnail.</div>
+          <div id="thumbs" class="thumbs"></div>
         </div>
 
         <div class="panel stage" id="stage">
@@ -194,81 +172,82 @@
           </div>
         </div>
 
-        <div class="panel right">
-          <h3>Sign Details</h3>
-          <div class="section" id="pinDetails">
-            <div class="row"><div>Selected:</div><div id="selId" class="muted">None</div></div>
-            <div class="row"><div>Sign Type</div>
-              <select id="fieldType"></select></div>
-            <div class="row"><div>Room #</div><input id="fieldRoomNum"/></div>
-            <div class="row"><div>Room Name</div><input id="fieldRoomName"/></div>
-            <div class="row"><div>Building</div><input id="fieldBuilding"/></div>
-            <div class="row"><div>Level</div><input id="fieldLevel"/></div>
-            <div class="row"><div>Notes</div><input id="fieldNotes"/></div>
-            <div class="row"><div>Position</div><div id="posLabel" class="muted">—</div></div>
-            <div class="grid">
-              <button id="btnAddPhoto">Add Photo</button>
-              <button id="btnOpenPhoto">Open Photo</button>
-              <button id="btnDuplicate">Duplicate</button>
-              <button id="btnDelete">Delete</button>
+        <div class="panel">
+          <h3>Pin Details</h3>
+          <div style="padding:.7rem .8rem;border-bottom:1px solid var(--line)">
+            <div class="row"><div style="width:100px" class="muted">Selected</div><div id="selId" class="muted">None</div></div>
+            <div class="row" style="margin-top:.4rem"><div style="width:100px">Type</div>
+              <select id="fieldType" style="flex:1"></select></div>
+            <div class="row" style="margin-top:.4rem"><div style="width:100px">Custom name</div>
+              <input id="fieldCustom" placeholder="Optional"/></div>
+            <div class="row" style="margin-top:.4rem"><div style="width:100px">Room #</div>
+              <input id="fieldRoomNum"/></div>
+            <div class="row" style="margin-top:.4rem"><div style="width:100px">Room name</div>
+              <input id="fieldRoomName"/></div>
+            <div class="row" style="margin-top:.4rem"><div style="width:100px">Building</div>
+              <input id="fieldBuilding"/></div>
+            <div class="row" style="margin-top:.4rem"><div style="width:100px">Level</div>
+              <input id="fieldLevel"/></div>
+            <div class="row" style="margin-top:.4rem"><div style="width:100px">Notes</div>
+              <input id="fieldNotes"/></div>
+            <div class="row" style="margin-top:.4rem"><div style="width:100px">Position</div>
+              <div id="posLabel" class="muted">—</div></div>
+            <div class="spaced" style="margin-top:.6rem">
+              <button id="btnAddPhoto">Add Photo(s)</button>
+              <button id="btnOpenPhoto">Open Photo Viewer</button>
+              <button id="btnDuplicate">Duplicate Pin</button>
+              <button id="btnDelete">Delete Pin</button>
+              <input type="file" id="inputPhoto" class="hidden" accept="image/*" multiple />
             </div>
-            <input type="file" class="hidden" id="inputPhoto" accept="image/*" multiple />
-            <div class="chips" id="warns"></div>
           </div>
 
-          <h3>Pins</h3>
-          <div class="section">
-            <div class="grid" style="margin-bottom:.5rem">
-              <button id="btnBulkType">Bulk: Set Type</button>
-              <button id="btnBulkBL">Bulk: Set Bldg/Level</button>
+          <h3 style="border-top:1px solid var(--line)">Pins</h3>
+          <div style="padding:.6rem .8rem">
+            <div class="spaced" style="margin-bottom:.5rem">
+              <input id="inputSearch" placeholder="Search…" style="flex:1;min-width:140px"/>
+              <select id="filterType"><option value="">All Types</option></select>
+              <label class="pill"><input type="checkbox" id="toggleField"> Larger pin labels</label>
+              <button id="btnAddPin" class="btn-primary">Add Pin</button>
+              <button id="btnClearPins">Clear Page Pins</button>
             </div>
-            <div class="list" id="pinList"></div>
-          </div>
-
-          <h3>Tips</h3>
-          <div class="section">
-            <div>• Callbox / Evac / Hall Direct: room name should be “ELEV. LOBBY”.</div>
-            <div>• “ELECTRICAL” or “DATA” rooms: recommended type is BOH.</div>
-            <div>• Exits allowed on any level.</div>
-            <div>• Restrooms: treat all the same; no special fields forced.</div>
+            <div id="pinList" class="cards" style="grid-template-columns:1fr; max-height:300px; overflow:auto"></div>
           </div>
         </div>
       </div>
-    </div>
-  </section>
+    </main>
+  </div>
 
-  <!-- Photo Modal -->
-  <div class="modal" id="photoModal">
+  <!-- Photo modal -->
+  <div id="photoModal" class="modal" aria-hidden="true">
     <div class="box">
       <header>
-        <strong>Photo Viewer & Measure</strong>
-        <div style="display:flex; gap:.5rem">
+        <strong>Photo Viewer &amp; Measure</strong>
+        <div class="spaced">
           <button id="btnPhotoMeasure">Measure: OFF</button>
-          <button id="btnPhotoCalib">Calibrate</button>
-          <button id="btnPhotoClose">Close</button>
+          <button id="btnPhotoClose" class="btn-primary">Close</button>
         </div>
       </header>
       <main>
         <div class="viewer">
-          <img id="photoImg"/>
-          <svg id="photoMeasureSvg" class="measure" width="100%" height="100%" style="position:absolute; inset:0"></svg>
+          <img id="photoImg" alt="Photo"/>
+          <svg id="photoMeasureSvg" class="measure"></svg>
         </div>
         <div class="side">
-          <div class="row"><div>Pin</div><div id="photoPinId" class="muted">—</div></div>
-          <div class="row"><div>Photo</div><div id="photoName" class="muted">—</div></div>
-          <div class="row"><div>Measures</div><div id="photoMeaCount" class="muted">0</div></div>
-          <div class="grid" style="margin-top:.5rem">
+          <div class="row"><div style="width:110px" class="muted">Pin</div><div id="photoPinId" class="muted">—</div></div>
+          <div class="row" style="margin-top:.4rem"><div style="width:110px" class="muted">Photo</div><div id="photoName" class="muted">—</div></div>
+          <div class="row" style="margin-top:.4rem"><div style="width:110px" class="muted">Measures</div><div id="photoMeaCount" class="muted">0</div></div>
+          <div class="spaced" style="margin-top:.6rem">
             <button id="btnPhotoPrev">Prev</button>
             <button id="btnPhotoNext">Next</button>
             <button id="btnPhotoDelete">Delete</button>
-            <button id="btnPhotoDownload">Download</button>
+            <button id="btnPhotoDownload" class="btn-primary">Download</button>
           </div>
-          <div class="footer-note">Click two points to draw, then enter feet.</div>
+          <div class="help" style="margin-top:.6rem">Click-drag to draw a line, release, then enter your measured length.</div>
         </div>
       </main>
     </div>
   </div>
 
-  <script src="app.js" defer></script>
+  <script src="app.js"></script>
 </body>
 </html>
