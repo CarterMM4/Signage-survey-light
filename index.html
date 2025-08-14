@@ -1,116 +1,93 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Signage Survey</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%230a111f'/%3E%3Ccircle cx='18' cy='44' r='6' fill='%2322c55e'/%3E%3Ccircle cx='32' cy='24' r='6' fill='%2322c55e'/%3E%3Ccircle cx='46' cy='38' r='6' fill='%2322c55e'/%3E%3Cpath d='M18 44 L32 24 L46 38' stroke='%2322c55e' stroke-width='5' fill='none'/%3E%3C/svg%3E" />
-  <link rel="preconnect" href="https://cdnjs.cloudflare.com" />
+
+  <!-- Favicon (inline SVG) -->
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%230a1328'/%3E%3Cpath d='M12 44 L28 20 L40 36 L52 24' stroke='%2322c55e' stroke-width='6' fill='none'/%3E%3Ccircle cx='28' cy='20' r='3' fill='%234cc9f0'/%3E%3Ccircle cx='40' cy='36' r='3' fill='%234cc9f0'/%3E%3Ccircle cx='52' cy='24' r='3' fill='%234cc9f0'/%3E%3C/svg%3E" />
+
+  <!-- Theme -->
   <style>
     :root{
-      /* Southwood-y emerald accents */
-      --accent:#22c55e;
-      --accent-2:#16a34a;
       --bg:#0b1020;
-      --panel:#0f172a;
-      --panel-2:#111a33;
-      --ink:#e6e9f5;
-      --muted:#aab0c6;
-      --line:#243056;
-      --chip:#12203f;
-      --soft:#0a1226;
+      --panel:#101733;
+      --soft:#0f1631;
+      --text:#e9edf8;
+      --muted:#aeb6d4;
+      --line:#283463;
+      --brand:#22c55e; /* Southwood green */
+      --accent:#4cc9f0;
+      --chip:#162146;
+      --pin:#0b1020;
+      --danger:#ef4444;
       --warn:#f59e0b;
-      --err:#ef4444;
-      --blue:#3b82f6;
-      --red:#ef4444;
-      --shadow:0 8px 28px rgba(0,0,0,.35);
-      --radius:14px;
     }
     *{box-sizing:border-box}
-    html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font-family:ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif}
+    html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
     .app{display:grid;grid-template-rows:auto 1fr; height:100%}
-
-    /* Toolbar */
     .toolbar{
-      position:sticky;top:0;z-index:10;
-      display:flex;flex-wrap:wrap;gap:.6rem;align-items:center;
-      padding:.7rem .9rem;background:linear-gradient(180deg,#0e1630,#0a1226);
-      border-bottom:1px solid var(--line);
-      box-shadow:0 2px 12px rgba(0,0,0,.25);
+      display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;
+      padding:.6rem .8rem;background:linear-gradient(180deg,#0f1738,#0b1330);
+      border-bottom:1px solid var(--line); position:sticky; top:0; z-index:5
     }
-    .group{display:flex;gap:.4rem;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:.35rem .45rem}
-    .brand{display:flex;gap:.6rem;align-items:center;margin-right:.35rem}
-    .dot{width:10px;height:10px;border-radius:999px;background:var(--accent);box-shadow:0 0 18px var(--accent)}
-    .brand b{letter-spacing:.2px}
-
-    button,.btn{background:#121b37;border:1px solid #2a3a6a;color:var(--ink);padding:.45rem .65rem;border-radius:10px;cursor:pointer}
-    button:hover{background:#162144;border-color:#35508f}
-    button.ok{background:var(--accent);border-color:#198f45;color:#061312}
-    button.ghost{background:transparent;border-color:#32457a}
-    input,select{background:#0e1631;border:1px solid #2a355f;color:var(--ink);padding:.45rem .55rem;border-radius:10px}
-    .pill{display:inline-flex;gap:.4rem;align-items:center;padding:.25rem .5rem;background:#0e1631;border:1px solid #24345f;border-radius:999px}
-
-    /* Main layout */
-    .shell{display:grid; grid-template-columns: 260px 1fr 340px; gap:.9rem; padding:.9rem; height:100%; min-height:0;}
-    .panel{background:var(--panel-2); border:1px solid var(--line); border-radius:var(--radius); overflow:hidden; display:flex; flex-direction:column; min-height:0; box-shadow:var(--shadow)}
-    .panel header{padding:.65rem .85rem; background:#111a36; border-bottom:1px solid var(--line); font-weight:600; color:#cae6d5}
-    .panel .body{padding:.6rem .7rem; overflow:auto; min-height:0}
-
-    /* Left: Projects + Pages */
-    .projects{padding:.5rem}
-    .project-row{display:grid;grid-template-columns:1fr auto;gap:.4rem;align-items:center;padding:.4rem .45rem;border:1px solid #22305a;background:#0e1631;border-radius:10px}
-    .project-row.active{outline:2px solid var(--accent)}
-    .project-row small{color:var(--muted)}
-    .thumbs{display:grid; gap:.55rem; padding:.5rem}
-    .thumb{background:#0e1631;border:1px solid #283766;border-radius:12px;padding:.4rem;cursor:pointer}
+    .toolbar .group{display:flex;gap:.4rem;align-items:center;background:#0e1634;border:1px solid var(--line);border-radius:10px;padding:.35rem .45rem}
+    .toolbar .group .pill{display:inline-flex;gap:.35rem;align-items:center;padding:.25rem .5rem;border-radius:999px;background:#0c1430;border:1px solid var(--line);color:#c8d3ff;font-size:.85rem}
+    button,.btn{background:#15204a;border:1px solid var(--line);color:var(--text);padding:.45rem .6rem;border-radius:9px;cursor:pointer}
+    button:hover{background:#1a2a5a}
+    input,select{background:#0f1738;border:1px solid var(--line);color:var(--text);padding:.45rem .55rem;border-radius:9px}
+    .brand{color:var(--brand);font-weight:700}
+    .layout{display:grid;grid-template-columns:260px 1fr 330px; gap:.75rem; padding:.75rem; height:100%; min-height:0}
+    .panel{background:var(--panel); border:1px solid var(--line); border-radius:14px; overflow:hidden; display:flex;flex-direction:column; min-height:0}
+    .panel h3{margin:0;padding:.55rem .75rem;border-bottom:1px solid var(--line);background:#0e1736;font-size:.95rem;color:#cfe4ff}
+    .left{display:grid;grid-template-rows: auto 1fr; gap:.75rem}
+    .section{padding:.55rem .7rem;border-bottom:1px solid var(--line)}
+    .list{overflow:auto}
+    .proj{display:grid;grid-template-columns:1fr auto;align-items:center;gap:.4rem;padding:.35rem .5rem;margin:.35rem;border:1px solid var(--line);border-radius:10px;background:#0f193c;cursor:pointer}
+    .proj.active{outline:2px solid var(--brand)}
+    .thumbs{padding:.5rem;overflow:auto;display:grid;gap:.5rem}
+    .thumb{background:#0f1733;border:1px solid var(--line);border-radius:10px;padding:.35rem;cursor:pointer}
     .thumb.active{outline:2px solid var(--accent)}
-    .thumb img{width:100%;height:110px;object-fit:cover;border-radius:8px;background:#060a18}
-    .thumb input{width:100%;margin-top:.35rem;font-size:.85rem}
-
-    /* Stage */
-    .stage{position:relative;display:flex;align-items:center;justify-content:center;background:#060b1a;border:1px dashed #2b3764;border-radius:var(--radius);overflow:hidden;margin:.6rem}
+    .thumb img{width:100%;height:110px;object-fit:cover;border-radius:6px;background:#060a18}
+    .thumb input{width:100%;margin-top:.35rem;font-size:.8rem;background:#0c1636;border:1px solid var(--line);color:var(--text);border-radius:8px;padding:.35rem .4rem}
+    .stage{position:relative;background:#091127;border:2px dashed #263468;border-radius:14px;display:flex;align-items:center;justify-content:center;overflow:hidden}
     .stage-inner{position:relative; width:100%; height:100%; display:flex; align-items:center; justify-content:center}
     #stageImage{max-width:100%; max-height:100%; display:block; user-select:none}
     #pinLayer{position:absolute; inset:0; pointer-events:none}
-    .pin{position:absolute; transform:translate(-50%, -100%); padding:.22rem .45rem; font-size:.8rem; border-radius:999px; border:1px solid rgba(0,0,0,.35); color:#061312; font-weight:800; box-shadow:0 6px 18px rgba(0,0,0,.36); pointer-events:auto; cursor:grab}
-    .pin:active{cursor:grabbing}
+    .pin{position:absolute; transform:translate(-50%, -100%); padding:.25rem .5rem; font-size:.85rem; border-radius:999px; border:1px solid rgba(0,0,0,.35); color:var(--pin); font-weight:800; box-shadow:0 4px 12px rgba(0,0,0,.35); pointer-events:auto}
     .pin.selected{outline:2px solid #fff}
-    svg.measure{position:absolute; inset:0; pointer-events:none}
+    .measure{position:absolute; pointer-events:none}
     .measure text{fill:#fff; font-size:12px; paint-order:stroke; stroke:#000; stroke-width:3}
-
-    /* Right: details */
-    .row{display:grid; grid-template-columns:120px 1fr; gap:.5rem; align-items:center; margin:.4rem 0}
-    .grid2{display:grid; grid-template-columns:1fr 1fr; gap:.5rem}
-    .list{display:grid; gap:.4rem; max-height:320px; overflow:auto}
-    .item{display:grid; grid-template-columns:22px 1fr auto; align-items:center; gap:.55rem; padding:.4rem .5rem; background:#0e1631; border:1px solid #273560; border-radius:10px}
-    .muted{color:var(--muted)}
+    .right{padding:0; overflow:auto}
+    .grid2{display:grid; grid-template-columns: 1fr 1fr; gap:.5rem}
+    .row{display:grid; grid-template-columns:110px 1fr; gap:.5rem; align-items:center; margin:.35rem 0}
     .chips{display:flex; flex-wrap:wrap; gap:.35rem}
-    .tag{font-size:.75rem; padding:.18rem .45rem; border-radius:999px; background:#122145; border:1px solid #2a3f76}
-    .tag.warn{background:#2a1f06; border-color:#6f4c0a; color:#ffdc9a}
-
-    .footer-note{font-size:.8rem;color:#9bb9a9;padding:.55rem .75rem;border-top:1px dashed #2b3b6a}
+    .tag{font-size:.75rem; padding:.15rem .45rem; border-radius:999px; background:var(--chip); border:1px solid var(--line)}
+    .help{font-size:.85rem;color:#9fb1ec}
+    .muted{color:var(--muted)}
+    .footer-note{font-size:.85rem;color:#93a2d8;padding:.5rem .75rem}
     .hidden{display:none}
-
     /* Modal */
-    .modal{position:fixed; inset:0; background:rgba(0,0,0,.65); display:none; align-items:center; justify-content:center; z-index:50}
-    .modal .box{background:#0f1733; border:1px solid #2b3566; border-radius:16px; width:min(980px,96vw); height:min(86vh,96vh); display:flex; flex-direction:column; box-shadow:var(--shadow)}
-    .modal .box header{display:flex; justify-content:space-between; align-items:center; padding:.7rem 1rem; border-bottom:1px solid #2b3566}
-    .modal .box main{flex:1; display:grid; grid-template-columns: 1fr 300px; min-height:0}
-    .viewer{position:relative; background:#060a18; display:flex; align-items:center; justify-content:center}
-    .viewer img{max-width:100%; max-height:100%}
-    .side{border-left:1px solid #2b3566; padding:.7rem .75rem; overflow:auto}
-    .side .row{grid-template-columns:90px 1fr}
+    .modal{position:fixed; inset:0; background:rgba(0,0,0,.6); display:none; align-items:center; justify-content:center; z-index:50}
+    .modal .box{background:#0f1733; border:1px solid var(--line); border-radius:14px; width:min(980px,95vw); height:min(84vh,95vh); display:flex; flex-direction:column}
+    .modal .box header{display:flex; justify-content:space-between; align-items:center; padding:.6rem .9rem; border-bottom:1px solid var(--line)}
+    .modal .box main{flex:1; display:grid; grid-template-columns: 1fr 300px}
+    .modal .viewer{position:relative; background:#060a18; display:flex; align-items:center; justify-content:center}
+    .modal .viewer img{max-width:100%; max-height:100%}
+    .modal .side{border-left:1px solid var(--line); padding:.6rem; overflow:auto}
+    .pill-btn{background:#0f1d3f;border:1px solid var(--brand); color:var(--brand)}
   </style>
 
-  <!-- libs -->
+  <!-- Libraries -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.1.0/tesseract.min.js"></script>
   <script>
-    if(window.pdfjsLib){
-      pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+    if (window['pdfjsLib']) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
     }
   </script>
 </head>
@@ -118,119 +95,109 @@
   <div class="app">
     <!-- Toolbar -->
     <div class="toolbar">
-      <div class="brand"><span class="dot"></span><b>Signage Survey</b></div>
-
       <div class="group">
-        <select id="projectPicker"></select>
-        <button id="btnNew">New</button>
-        <button id="btnSaveAs">Save As</button>
-        <button id="btnRename" class="ghost">Rename</button>
+        <strong class="brand">Southwood</strong>
+        <span class="muted">Signage Survey</span>
       </div>
-
+      <div class="group">
+        <button id="btnNew">New Project</button>
+        <button id="btnSaveAs">Save As…</button>
+        <button id="btnRename">Rename</button>
+      </div>
       <div class="group">
         <input type="file" id="inputUpload" accept="image/*,application/pdf" multiple class="hidden" />
-        <button id="btnUpload">Add Image/PDF</button>
-        <span class="pill">Bldg <input id="inputBuilding" style="width:120px" placeholder="A"/></span>
-        <span class="pill">Level <input id="inputLevel" style="width:80px" placeholder="1"/></span>
+        <button id="btnUpload">Add Page</button>
+        <label class="pill">Bldg <input id="inputBuilding" style="width:110px" placeholder="A"/></label>
+        <label class="pill">Level <input id="inputLevel" style="width:80px" placeholder="1"/></label>
       </div>
-
       <div class="group">
         <button id="btnExportCSV">CSV</button>
         <button id="btnExportXLSX">Excel</button>
-        <button id="btnExportZIP">ZIP+Photos</button>
+        <button id="btnExportZIP">ZIP + Photos</button>
         <input type="file" id="inputImportCSV" accept="text/csv" class="hidden" />
-        <button id="btnImportCSV" class="ghost">Import CSV</button>
+        <button id="btnImportCSV">Import CSV</button>
       </div>
-
       <div class="group">
-        <button id="btnOCR" class="ghost">OCR View</button>
+        <button id="btnOCR">OCR</button>
         <button id="btnCalibrate">Calibrate</button>
-        <button id="btnMeasureToggle">Measure: OFF</button>
-        <button id="btnMeasureReset" class="ghost">Reset</button>
+        <button id="btnMeasureToggle">Measuring: OFF</button>
+        <button id="btnMeasureReset">Reset Measure</button>
       </div>
-
       <div class="group">
-        <button id="btnUndo" class="ghost">Undo</button>
-        <button id="btnRedo" class="ghost">Redo</button>
+        <button id="btnUndo">Undo</button>
+        <button id="btnRedo">Redo</button>
       </div>
-
       <div class="group">
-        <input id="inputSearch" placeholder="Search pins…" style="width:200px"/>
+        <input id="inputSearch" placeholder="Search…" style="width:190px"/>
         <select id="filterType"><option value="">All Types</option></select>
         <label class="pill"><input type="checkbox" id="toggleField"> Field Mode</label>
       </div>
-
-      <div class="group">
-        <button id="btnAddPin" title="Click, then click map to place" class="ok">Add Pin</button>
-        <button id="btnClearPins" class="ghost">Clear Page Pins</button>
-      </div>
-
-      <div id="projectLabel" class="muted" style="margin-left:auto">—</div>
+      <div class="muted" id="projectLabel" style="margin-left:auto">—</div>
     </div>
 
-    <!-- Main -->
-    <div class="shell">
-      <!-- Left: Projects & Pages -->
-      <div class="panel">
-        <header>Projects</header>
-        <div class="body">
-          <div id="projectsList" class="projects"></div>
+    <!-- Main Layout -->
+    <div class="layout">
+      <!-- Left column: Projects + Pages -->
+      <div class="left">
+        <div class="panel">
+          <h3>Projects</h3>
+          <div class="list" id="projectsList"></div>
+          <div class="footer-note">Click a project to switch.</div>
         </div>
 
-        <header style="margin-top:.4rem">Pages</header>
-        <div class="body">
-          <div id="thumbs" class="thumbs"></div>
-          <div class="footer-note">Click to switch. Rename below each thumbnail.</div>
+        <div class="panel">
+          <h3>Pages</h3>
+          <div class="thumbs" id="thumbs"></div>
+          <div class="footer-note">Tip: rename under each thumbnail.</div>
         </div>
       </div>
 
       <!-- Stage -->
-      <div class="panel">
-        <header>Canvas</header>
-        <div class="body" style="padding:.2rem .2rem 0;">
-          <div class="stage" id="stage" style="height: calc(100vh - 210px);">
-            <div class="stage-inner">
-              <img id="stageImage" alt="No page yet" draggable="false" />
-              <svg id="measureSvg" class="measure" width="100%" height="100%"></svg>
-              <div id="pinLayer"></div>
-            </div>
-          </div>
+      <div class="panel stage" id="stage">
+        <div class="stage-inner">
+          <img id="stageImage" alt="No page yet" draggable="false" />
+          <svg id="measureSvg" class="measure" width="100%" height="100%"></svg>
+          <div id="pinLayer"></div>
         </div>
       </div>
 
-      <!-- Right: Pin Details -->
-      <div class="panel">
-        <header>Pin Details</header>
-        <div class="body">
+      <!-- Right column -->
+      <div class="panel right">
+        <h3>Sign Details</h3>
+        <div class="section">
           <div class="row"><div>Selected</div><div id="selId" class="muted">None</div></div>
-          <div class="row">
-            <div>Type</div>
-            <div>
-              <input id="fieldType" list="typeList" placeholder="Type or pick…" />
-              <datalist id="typeList"></datalist>
-            </div>
-          </div>
-          <div class="row"><div>Label</div><input id="fieldLabel" placeholder="Optional short label (shown on map)"/></div>
+          <div class="row"><div>Type</div><select id="fieldType"></select></div>
+          <div class="row"><div>Custom Label</div><input id="fieldCustom"/></div>
           <div class="row"><div>Room #</div><input id="fieldRoomNum"/></div>
           <div class="row"><div>Room Name</div><input id="fieldRoomName"/></div>
           <div class="row"><div>Building</div><input id="fieldBuilding"/></div>
           <div class="row"><div>Level</div><input id="fieldLevel"/></div>
-          <div class="row"><div>Notes</div><input id="fieldNotes" placeholder="Any notes…"/></div>
+          <div class="row"><div>Notes</div><input id="fieldNotes"/></div>
           <div class="row"><div>Position</div><div id="posLabel" class="muted">—</div></div>
-
-          <div class="grid2" style="margin-top:.35rem">
+          <div class="grid2" style="margin-top:.5rem">
             <button id="btnAddPhoto">Add Photo(s)</button>
-            <button id="btnOpenPhoto">Open Viewer</button>
-            <button id="btnDuplicate" class="ghost">Duplicate</button>
-            <button id="btnDelete" class="ghost">Delete</button>
+            <button id="btnOpenPhoto">Open Photo</button>
+            <button id="btnDuplicate">Duplicate</button>
+            <button id="btnDelete">Delete</button>
           </div>
-          <input type="file" id="inputPhoto" class="hidden" accept="image/*" multiple />
-          <div id="warns" class="chips" style="margin-top:.5rem"></div>
+          <input type="file" class="hidden" id="inputPhoto" accept="image/*" multiple />
+          <div class="chips" id="warns" style="margin-top:.5rem"></div>
         </div>
 
-        <header>Pins on Page</header>
-        <div class="body">
-          <div id="pinList" class="list"></div>
+        <h3>Pins</h3>
+        <div class="section">
+          <div class="grid2" style="margin-bottom:.5rem">
+            <button id="btnClearPins">Clear Page Pins</button>
+            <button id="btnAddPin" class="pill-btn">Add Pin</button>
+          </div>
+          <div class="list" id="pinList"></div>
+        </div>
+
+        <h3>Tips</h3>
+        <div class="section help">
+          <div>• You can drag pins directly on the map.</div>
+          <div>• Double-click a pin to open photos.</div>
+          <div>• Measurements: Click two points; enter your real distance (ft or in).</div>
         </div>
       </div>
     </div>
@@ -250,7 +217,7 @@
       <main>
         <div class="viewer">
           <img id="photoImg" alt="photo"/>
-          <svg id="photoMeasureSvg" class="measure" width="100%" height="100%"></svg>
+          <svg id="photoMeasureSvg" class="measure" width="100%" height="100%" style="position:absolute; inset:0"></svg>
         </div>
         <div class="side">
           <div class="row"><div>Pin</div><div id="photoPinId" class="muted">—</div></div>
@@ -259,18 +226,16 @@
           <div class="grid2" style="margin-top:.5rem">
             <button id="btnPhotoPrev">Prev</button>
             <button id="btnPhotoNext">Next</button>
-            <button id="btnPhotoDelete" class="ghost">Delete</button>
+            <button id="btnPhotoDelete">Delete</button>
             <button id="btnPhotoDownload">Download</button>
           </div>
-          <div class="footer-note">
-            Draw a line, then type the real length (e.g. “6.5 ft”). Leave blank to store pixels only.<br/>
-            Use <b>Calibrate</b> to set a scale for auto-feet from pixels.
-          </div>
+          <div class="footer-note">Click two points, then enter real distance (e.g. “7.5 ft” or “90 in”).</div>
         </div>
       </main>
     </div>
   </div>
 
+  <!-- App -->
   <script src="app.js"></script>
 </body>
 </html>
