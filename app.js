@@ -1,34 +1,39 @@
 // app.js
 document.addEventListener('DOMContentLoaded', () => {
-  /***********************
-   * Screen navigation
-   ***********************/
-  const screens = {
-    home: document.getElementById('screen-home'),
-    projects: document.getElementById('screen-projects'),
-    editor: document.getElementById('screen-editor'),
-  };
-  const projectsListEl = document.getElementById('projectsList');
-
-  const navHome = document.getElementById('navHome');
-  const navProjects = document.getElementById('navProjects');
-  const navEditor = document.getElementById('navEditor');
-
-  const homeNew = document.getElementById('homeNew');
-  const homeOpen = document.getElementById('homeOpen');
-  const homeEditor = document.getElementById('homeEditor');
-
-  function showScreen(name){
-    Object.values(screens).forEach(s=> s.classList.remove('active'));
-    if(screens[name]) screens[name].classList.add('active');
-  }
-
-  /***********************
-   * Helpers & constants *
-   ***********************/
+  /******************
+   * Utilities
+   ******************/
   const $ = (id) => document.getElementById(id);
   const on = (el, evt, fn) => el && el.addEventListener(evt, fn);
 
+  function id(){ return Math.random().toString(36).slice(2,10); }
+  function clamp(n,min,max){ return Math.max(min, Math.min(max, n)); }
+  function fix(n){ return typeof n==='number'? +Number(n||0).toFixed(3):'' }
+  function dist(a,b){ const dx=a.x-b.x, dy=a.y-b.y; return Math.sqrt(dx*dx+dy*dy); }
+
+  /******************
+   * Screens
+   ******************/
+  const screenHome = $('screenHome');
+  const screenProjects = $('screenProjects');
+  const screenEditor = $('screenEditor');
+
+  function showScreen(which){
+    [screenHome, screenProjects, screenEditor].forEach(s=> s.classList.remove('show'));
+    if(which==='home') screenHome.classList.add('show');
+    if(which==='projects') screenProjects.classList.add('show');
+    if(which==='editor') screenEditor.classList.add('show');
+  }
+
+  on($('navHome'),'click',()=> showScreen('home'));
+  on($('navProjects'),'click',()=> { renderProjectsGrid(); showScreen('projects'); });
+  on($('navEditor'),'click',()=> showScreen('editor'));
+  on($('homeNew'),'click',()=> { createProjectFlow(); });
+  on($('homeOpen'),'click',()=> { renderProjectsGrid(); showScreen('projects'); });
+
+  /******************
+   * Data Model
+   ******************/
   const SIGN_TYPES = {
     'FOH':'#0ea5e9','BOH':'#64748b','Elevator':'#8b5cf6','UNIT ID':'#22c55e',
     'Stair - Ingress':'#22c55e','Stair - Egress':'#ef4444','Ingress':'#22c55e',
@@ -41,25 +46,122 @@ document.addEventListener('DOMContentLoaded', () => {
     'Stair - Ingress':'ING','Stair - Egress':'EGR'
   };
 
-  /***********************
-   * Editor DOM references *
-   ***********************/
+  let projects = loadProjects();
+  let project = null; // current project object
+  const projectContext = { building:'', level:'' };
+
+  // Undo/redo if you want it later
+  const UNDO = []; const REDO = []; const MAX_UNDO = 50;
+  function snapshot(){ return JSON.stringify(project); }
+  function commit(){ UNDO.push(snapshot()); if(UNDO.length>MAX_UNDO) UNDO.shift(); REDO.length=0; }
+
+  function loadProjects(){
+    try{ return JSON.parse(localStorage.getItem('survey:projects')||'[]'); } catch { return []; }
+  }
+  function saveProjectsList(){
+    localStorage.setItem('survey:projects', JSON.stringify(projects));
+  }
+  function saveProject(p){
+    p.updatedAt = Date.now();
+    const i = projects.findIndex(x=>x.id===p.id);
+    if(i>=0) projects[i]=p; else projects.push(p);
+    saveProjectsList();
+  }
+  function newProject(name){
+    return {
+      id:id(), name:name, createdAt:Date.now(), updatedAt:Date.now(),
+      pages:[],
+      settings:{ fieldMode:false, strictRules:false }
+    };
+  }
+
+  function selectProject(pid){
+    const found = projects.find(p=>p.id===pid);
+    if(!found){ alert('Project not found.'); return; }
+    project = found;
+    localStorage.setItem('survey:lastOpenProjectId', pid);
+    renderEditorAll();
+    showScreen('editor');
+  }
+
+  /******************
+   * Projects screen
+   ******************/
+  const projectsGrid = $('projectsGrid');
+  const projSearch = $('projSearch');
+  on(projSearch,'input',()=> renderProjectsGrid());
+
+  function renderProjectsGrid(){
+    const q = (projSearch.value||'').toLowerCase();
+    projects = loadProjects();
+
+    projectsGrid.innerHTML = '';
+    projects
+      .filter(p=>!q || p.name.toLowerCase().includes(q))
+      .sort((a,b)=> b.updatedAt - a.updatedAt)
+      .forEach(p=>{
+        const card = document.createElement('div');
+        card.className='card';
+        const h = document.createElement('h4'); h.textContent = p.name; card.appendChild(h);
+        const meta = document.createElement('div');
+        meta.className='muted';
+        const pinCount = (p.pages||[]).reduce((acc,pg)=>acc + (pg.pins?pg.pins.length:0),0);
+        meta.textContent = `Pages: ${p.pages.length} • Pins: ${pinCount}`;
+        card.appendChild(meta);
+
+        const row = document.createElement('div'); row.className='row';
+        const openBtn = document.createElement('button'); openBtn.textContent='Open'; openBtn.className='btn-primary';
+        on(openBtn,'click',()=> selectProject(p.id));
+        const renameBtn = document.createElement('button'); renameBtn.textContent='Rename';
+        on(renameBtn,'click',()=>{
+          const name = prompt('Rename project:', p.name);
+          if(!name) return;
+          p.name = name; saveProject(p); renderProjectsGrid();
+        });
+        const delBtn = document.createElement('button'); delBtn.textContent='Delete';
+        on(delBtn,'click',()=>{
+          if(!confirm('Delete this project?')) return;
+          projects = projects.filter(x=>x.id!==p.id);
+          saveProjectsList();
+          renderProjectsGrid();
+        });
+        row.appendChild(openBtn); row.appendChild(renameBtn); row.appendChild(delBtn);
+        card.appendChild(row);
+        projectsGrid.appendChild(card);
+      });
+  }
+
+  function createProjectFlow(){
+    const name = prompt('Project name?','New Project');
+    if(!name) return;
+    const p = newProject(name);
+    saveProject(p);
+    selectProject(p.id);
+  }
+  on($('btnCreateProj'),'click',()=> createProjectFlow());
+
+  /******************
+   * Editor DOM refs
+   ******************/
   const thumbsEl = $('thumbs');
   const stage = $('stage');
   const stageImage = $('stageImage');
-  const pinLayer = $('pinLayer');
   const measureSvg = $('measureSvg');
+  const pinLayer = $('pinLayer');
 
   const projectLabel = $('projectLabel');
   const inputUpload = $('inputUpload');
+  const btnUpload = $('btnUpload');
+
   const inputBuilding = $('inputBuilding');
   const inputLevel = $('inputLevel');
+
   const inputSearch = $('inputSearch');
   const filterType = $('filterType');
-  const toggleStrict = $('toggleStrict');
   const toggleField = $('toggleField');
 
   const fieldType = $('fieldType');
+  const fieldCustom = $('fieldCustom');
   const fieldRoomNum = $('fieldRoomNum');
   const fieldRoomName = $('fieldRoomName');
   const fieldBuilding = $('fieldBuilding');
@@ -67,35 +169,15 @@ document.addEventListener('DOMContentLoaded', () => {
   const fieldNotes = $('fieldNotes');
   const selId = $('selId');
   const posLabel = $('posLabel');
-  const warnsEl = $('warns');
   const pinList = $('pinList');
 
-  // Toolbar buttons
-  const btnNew = $('btnNew');
-  const btnOpen = $('btnOpen');
-  const btnSaveAs = $('btnSaveAs');
-  const btnRename = $('btnRename');
-  const btnUpload = $('btnUpload');
-  const btnExportCSV = $('btnExportCSV');
-  const btnExportXLSX = $('btnExportXLSX');
-  const btnExportZIP = $('btnExportZIP');
-  const btnImportCSV = $('btnImportCSV');
-  const inputImportCSV = $('inputImportCSV');
-
-  const btnCalibrate = $('btnCalibrate');
-  const btnMeasureToggle = $('btnMeasureToggle');
-  const btnMeasureReset = $('btnMeasureReset');
-
-  const btnUndo = $('btnUndo');
-  const btnRedo = $('btnRedo');
-  const btnClearPins = $('btnClearPins');
   const btnAddPin = $('btnAddPin');
-
-  const btnAddPhoto = $('btnAddPhoto');
-  const inputPhoto = $('inputPhoto');
-  const btnOpenPhoto = $('btnOpenPhoto');
+  const btnClearPins = $('btnClearPins');
   const btnDuplicate = $('btnDuplicate');
   const btnDelete = $('btnDelete');
+  const btnOpenPhoto = $('btnOpenPhoto');
+  const btnAddPhoto = $('btnAddPhoto');
+  const inputPhoto = $('inputPhoto');
 
   // Photo modal
   const photoModal = $('photoModal');
@@ -106,939 +188,657 @@ document.addEventListener('DOMContentLoaded', () => {
   const photoMeaCount = $('photoMeaCount');
   const btnPhotoClose = $('btnPhotoClose');
   const btnPhotoMeasure = $('btnPhotoMeasure');
-  const btnPhotoCalib = $('btnPhotoCalib');
   const btnPhotoPrev = $('btnPhotoPrev');
   const btnPhotoNext = $('btnPhotoNext');
   const btnPhotoDelete = $('btnPhotoDelete');
   const btnPhotoDownload = $('btnPhotoDownload');
 
-  /************************
-   * App state / Undo/redo
-   ************************/
-  let projects = [];
-  let currentProjectId = null;
-  let project = null;
-
-  const UNDO = [];
-  const REDO = [];
-  const MAX_UNDO = 50;
-
-  const projectContext = { building:'', level:'' };
-
-  // Stage interactions
-  let addingPin = false;
-  let dragging = null;        // pin element
-  let dragData = null;        // geometry
-  let measureMode = false;
-  let calibFirst = null;
-  let measureFirst = null;
-  let fieldMode = false;
-  let calibAwait = null;      // 'main' | 'photo'
-
-  // Photo state
-  const photoState = { pin:null, idx:0, measure:false, calib:null };
-  let photoMeasureFirst = null;
-  let photoRubberLine = null;
-  let mainRubberLine = null;
-
-  /*******************
-   * Utilities
-   *******************/
-  function id(){ return Math.random().toString(36).slice(2,10); }
-  function fix(n){ return typeof n==='number'? +Number(n||0).toFixed(3):''; }
-  function pctLabel(x,y){ return `${(x||0).toFixed(2)}%, ${(y||0).toFixed(2)}%`; }
-  function dist(a,b){ const dx=a.x-b.x, dy=a.y-b.y; return Math.sqrt(dx*dx+dy*dy); }
-
-  function toPctCoordsFromPoint(clientX, clientY){
-    const rect=stageImage.getBoundingClientRect();
-    const x=Math.min(Math.max(0,clientX-rect.left),rect.width);
-    const y=Math.min(Math.max(0,clientY-rect.top),rect.height);
-    return { x_pct: +(x/rect.width*100).toFixed(3), y_pct:+(y/rect.height*100).toFixed(3) };
-  }
-  function toPctCoords(e){ return toPctCoordsFromPoint(e.clientX, e.clientY); }
-  function toLocal(e){ const r=stageImage.getBoundingClientRect(); return { x:e.clientX-r.left, y:e.clientY-r.top }; }
-  function toScreen(pt){ const r=stageImage.getBoundingClientRect(); return { x:r.left+pt.x, y:r.top+pt.y }; }
-
-  function csvEscape(v){ const s=(v==null? '': String(v)); if(/["\n,]/.test(s)) return '"'+s.replace(/"/g,'""')+'"'; return s; }
-  function parseCsvLine(line){
-    const out=[]; let cur=''; let i=0; let inQ=false;
-    while(i<line.length){
-      const ch=line[i++];
-      if(inQ){
-        if(ch==='"'){ if(line[i]==='"'){ cur+='"'; i++; } else { inQ=false; } }
-        else { cur+=ch; }
-      }else{
-        if(ch===','){ out.push(cur); cur=''; }
-        else if(ch==='"'){ inQ=true; }
-        else { cur+=ch; }
-      }
-    }
-    out.push(cur); return out;
-  }
-
-  function fileToDataURL(file){
-    return new Promise((res,rej)=>{ const fr=new FileReader(); fr.onload=()=>res(fr.result); fr.onerror=rej; fr.readAsDataURL(file); });
-  }
-  function dataURLtoArrayBuffer(dataURL){
-    const bstr=atob(dataURL.split(',')[1]); const len=bstr.length; const buf=new Uint8Array(len);
-    for(let i=0;i<len;i++) buf[i]=bstr.charCodeAt(i); return buf;
-  }
-  function dataURLtoBlob(dataURL){
-    const arr=dataURL.split(',');
-    const match=(arr[0].match(/:(.*?);/)||[]);
-    const mime=match[1]||'image/png';
-    const ab=dataURLtoArrayBuffer(dataURL);
-    return new Blob([ab],{type:mime});
-  }
-  function downloadText(name, text){ downloadFile(name, new Blob([text],{type:'text/plain'})); }
-  function downloadFile(name, blob){
-    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name;
-    document.body.appendChild(a); a.click();
-    setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 1000);
-  }
-
-  /*********************
-   * Data model
-   *********************/
-  function newProject(name){
-    return {
-      id: id(),
-      name: name,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-      pages: [],
-      settings: { colorsByType: SIGN_TYPES, fieldMode: false, strictRules: false }
-    };
-  }
+  /******************
+   * Editor helpers
+   ******************/
   function currentPage(){
-    if(!project._pageId && project.pages[0]) project._pageId=project.pages[0].id;
-    return project.pages.find(p=>p.id===project._pageId);
+    if(!project) return null;
+    if(!project._pageId && project.pages[0]) project._pageId = project.pages[0].id;
+    return project.pages.find(p=>p.id===project._pageId) || null;
   }
   function makePin(x_pct,y_pct){
     return {
-      id: id(),
-      sign_type: '',
-      room_number: '',
-      room_name: '',
+      id:id(),
+      sign_type:'',
+      custom_name:'',
+      room_number:'',
+      room_name:'',
       building: inputBuilding.value || projectContext.building || '',
       level: inputLevel.value || projectContext.level || '',
-      x_pct: x_pct,
-      y_pct: y_pct,
-      custom_name: '',
-      notes: '',
-      photos: [],
-      lastEdited: Date.now()
+      x_pct:x_pct,
+      y_pct:y_pct,
+      notes:'',
+      photos:[],
+      lastEdited:Date.now()
     };
   }
   function findPin(idv){
-    for(const pg of project.pages){
-      const f=(pg.pins||[]).find(p=>p.id===idv);
+    for(const pg of (project?.pages||[])){
+      const f = (pg.pins||[]).find(p=>p.id===idv);
       if(f) return f;
     }
     return null;
   }
-  function pinPage(pinId){
-    for(const pg of project.pages){
-      if((pg.pins||[]).some(p=>p.id===pinId)) return pg;
-    }
-    return null;
-  }
-  function checkedPinIds(){ return [...pinList.querySelectorAll('input[type="checkbox"]:checked')].map(cb=>cb.dataset.id); }
 
-  function selectProject(pid){
-    project = projects.find(p=>p.id===pid);
+  /******************
+   * Upload pages
+   ******************/
+  on(btnUpload,'click',()=> inputUpload.click());
+  on(inputUpload,'change', async (e)=>{
     if(!project) return;
-    localStorage.setItem('survey:lastOpenProjectId', pid);
-    renderAll();
-    renderProjectsList(); // keep projects list fresh
-  }
-  function saveProject(p){
-    p.updatedAt=Date.now();
-    const i=projects.findIndex(x=>x.id===p.id);
-    if(i>=0) projects[i]=p; else projects.push(p);
-    localStorage.setItem('survey:projects', JSON.stringify(projects));
-    projects = loadProjects();
-  }
-  function loadProjects(){
-    try{ return JSON.parse(localStorage.getItem('survey:projects')||'[]'); }catch{ return []; }
-  }
+    const files = [...e.target.files];
+    if(!files.length) return;
+    commit();
+    for(const f of files){
+      if(f.type==='application/pdf'){ await addPdfPages(f); }
+      else if(f.type.startsWith('image/')){
+        const url = URL.createObjectURL(f);
+        addImagePage(url, f.name.replace(/\.[^.]+$/,''));
+      }
+    }
+    renderEditorAll();
+    inputUpload.value = '';
+  });
 
-  function addImagePage(url, name){
-    const pg={
+  function addImagePage(blobUrl, name){
+    const pg = {
       id: id(),
       name: name || 'Image',
       kind: 'image',
-      blobUrl: url,
+      blobUrl: blobUrl,
       pins: [],
       measurements: [],
       updatedAt: Date.now()
     };
     project.pages.push(pg);
-    if(!project._pageId) project._pageId=pg.id;
+    if(!project._pageId) project._pageId = pg.id;
     saveProject(project);
   }
+
   async function addPdfPages(file){
-    const url=URL.createObjectURL(file);
-    const pdf=await pdfjsLib.getDocument(url).promise;
+    const url = URL.createObjectURL(file);
+    const pdf = await pdfjsLib.getDocument(url).promise;
     for(let i=1;i<=pdf.numPages;i++){
-      const page=await pdf.getPage(i);
-      const viewport=page.getViewport({scale:2});
-      const canvas=document.createElement('canvas');
-      canvas.width=viewport.width; canvas.height=viewport.height;
-      const ctx=canvas.getContext('2d');
+      const page = await pdf.getPage(i);
+      const viewport = page.getViewport({scale:2});
+      const canvas = document.createElement('canvas');
+      canvas.width = viewport.width; canvas.height = viewport.height;
+      const ctx = canvas.getContext('2d');
       await page.render({canvasContext:ctx, viewport:viewport}).promise;
-      const data=canvas.toDataURL('image/png');
-      const pg={
-        id: id(),
+      const dataUrl = canvas.toDataURL('image/png');
+      const pg = {
+        id:id(),
         name: `${file.name.replace(/\.[^.]+$/,'')} · p${i}`,
-        kind: 'pdf',
-        pdfPage: i,
-        blobUrl: data,
-        pins: [],
-        measurements: [],
-        updatedAt: Date.now()
+        kind:'pdf',
+        pdfPage:i,
+        blobUrl:dataUrl,
+        pins:[],
+        measurements:[],
+        updatedAt:Date.now()
       };
       project.pages.push(pg);
     }
-    if(!project._pageId && project.pages[0]) project._pageId=project.pages[0].id;
+    if(!project._pageId && project.pages[0]) project._pageId = project.pages[0].id;
     saveProject(project);
   }
 
-  /****************
+  /******************
    * Rendering
-   ****************/
-  function renderAll(){
-    renderTypeOptionsOnce();
-    renderThumbs();
-    renderStage();
-    renderPins();
-    renderPinsList();
-    renderProjectLabel();
-    drawMeasurements();
-    toggleStrict.checked=!!project.settings.strictRules;
-    toggleField.checked=!!project.settings.fieldMode;
-  }
-
-  let _typesFilled = false;
-  function renderTypeOptionsOnce(){
-    if(_typesFilled) return;
-    const customOpt = document.createElement('option');
-    customOpt.value = '__CUSTOM__';
-    customOpt.textContent = 'Custom (type your own)…';
-    fieldType.appendChild(customOpt);
-
+   ******************/
+  let typesFilled = false;
+  function ensureTypes(){
+    if(typesFilled) return;
     Object.keys(SIGN_TYPES).forEach(t=>{
       const o=document.createElement('option'); o.value=t; o.textContent=t;
       filterType.appendChild(o.cloneNode(true));
       fieldType.appendChild(o);
     });
-    _typesFilled = true;
+    typesFilled = true;
+  }
+
+  function renderEditorAll(){
+    ensureTypes();
+    renderProjectLabel();
+    renderThumbs();
+    renderStage();
+    renderPins();
+    renderPinsList();
+    toggleField.checked = !!project.settings.fieldMode;
   }
 
   function renderProjectLabel(){
-    const totalPins = project.pages.reduce((a,p)=>a+(p.pins?.length||0),0);
-    projectLabel.textContent = `Project: ${project.name} • Pages: ${project.pages.length} • Pins: ${totalPins}`;
+    const pinCount = (project.pages||[]).reduce((acc,pg)=>acc + (pg.pins?pg.pins.length:0),0);
+    projectLabel.textContent = `Project: ${project.name} • Pages: ${project.pages.length} • Pins: ${pinCount}`;
   }
 
   function renderThumbs(){
-    thumbsEl.innerHTML='';
-    project.pages.forEach((pg)=>{
-      const d=document.createElement('div'); d.className='thumb'+(project._pageId===pg.id?' active':'');
-      const im=document.createElement('img'); im.src=pg.blobUrl; d.appendChild(im);
-      const inp=document.createElement('input'); inp.value=pg.name;
-      inp.oninput=()=>{ pg.name=inp.value; pg.updatedAt=Date.now(); saveProject(project); renderProjectLabel(); };
+    thumbsEl.innerHTML = '';
+    (project.pages||[]).forEach(pg=>{
+      const d = document.createElement('div'); d.className='thumb'+(project._pageId===pg.id?' active':'');
+      const im = document.createElement('img'); im.src = pg.blobUrl; d.appendChild(im);
+      const inp = document.createElement('input'); inp.value = pg.name;
+      on(inp,'input',()=>{ pg.name = inp.value; pg.updatedAt=Date.now(); saveProject(project); renderProjectLabel(); });
       d.appendChild(inp);
-      d.onclick=()=>{ project._pageId=pg.id; saveProject(project); renderStage(); renderPins(); drawMeasurements(); };
+      on(d,'click',()=>{ project._pageId=pg.id; saveProject(project); renderStage(); renderPins(); drawMeasurements(); });
       thumbsEl.appendChild(d);
     });
   }
 
   function renderStage(){
-    const pg=currentPage();
+    const pg = currentPage();
     if(!pg){ stageImage.removeAttribute('src'); return; }
-    stageImage.src=pg.blobUrl;
+    stageImage.src = pg.blobUrl;
+  }
+
+  function pctFromEvent(e){
+    const rect = stageImage.getBoundingClientRect();
+    const x = clamp(e.clientX - rect.left, 0, rect.width);
+    const y = clamp(e.clientY - rect.top , 0, rect.height);
+    return {
+      x_pct: +(x/rect.width*100).toFixed(3),
+      y_pct: + (y/rect.height*100).toFixed(3)
+    };
   }
 
   function renderPins(){
-    pinLayer.innerHTML='';
-    const pg=currentPage(); if(!pg) return;
-    fieldMode=!!project.settings.fieldMode;
-    const q=(inputSearch.value||'').toLowerCase();
-    const typeFilter=filterType.value;
+    pinLayer.innerHTML = '';
+    const pg = currentPage(); if(!pg) return;
+    const q = (inputSearch.value||'').toLowerCase();
+    const typeFilter = filterType.value;
+    const fieldMode = !!project.settings.fieldMode;
 
     (pg.pins||[]).forEach(p=>{
-      if(typeFilter && p.sign_type!==typeFilter) return;
-      const line=[p.custom_name||'', p.sign_type, p.room_number, p.room_name, p.building, p.level, p.notes].join(' ').toLowerCase();
+      if(typeFilter && p.sign_type !== typeFilter) return;
+      const line = [p.sign_type,p.custom_name,p.room_number,p.room_name,p.building,p.level,p.notes].join(' ').toLowerCase();
       if(q && !line.includes(q)) return;
 
-      const el=document.createElement('div');
-      el.className='pin'+(p.id===project._sel?' selected':'');
-      el.dataset.id=p.id;
-      const label = p.custom_name || SHORT[p.sign_type] || (p.sign_type||'---').slice(0,3).toUpperCase();
-      el.textContent=label;
-      el.style.left=p.x_pct+'%';
-      el.style.top=p.y_pct+'%';
-      el.style.background=SIGN_TYPES[p.sign_type]||'#22c55e';
-      el.style.padding = fieldMode? '.28rem .5rem' : '.2rem .45rem';
-      el.style.fontSize= fieldMode? '0.9rem' : '0.8rem';
-      pinLayer.appendChild(el);
+      const el = document.createElement('div');
+      el.className = 'pin'+(p.id===project._sel?' selected':'');
+      el.dataset.id = p.id;
+      const label = p.custom_name ? p.custom_name
+                  : (SHORT[p.sign_type] || (p.sign_type||'PIN').slice(0,4).toUpperCase());
+      el.textContent = label;
+      el.style.left = p.x_pct + '%';
+      el.style.top = p.y_pct + '%';
+      el.style.background = SIGN_TYPES[p.sign_type] || '#44d983';
+      el.style.padding = fieldMode? '.32rem .6rem' : '.22rem .45rem';
+      el.style.fontSize = fieldMode? '0.95rem' : '0.78rem';
 
-      // Dragging
-      el.addEventListener('pointerdown', (e)=>{
-        e.preventDefault();
-        selectPin(p.id);
-        dragging = el;
-        const rect=stageImage.getBoundingClientRect();
-        dragData = {
-          rectLeft: rect.left,
-          rectTop: rect.top,
-          rectW: rect.width,
-          rectH: rect.height
-        };
-        el.setPointerCapture?.(e.pointerId);
+      // drag support
+      on(el,'pointerdown',(ev)=>{
+        ev.preventDefault();
+        selectPin(p.id,false);
+        el.setPointerCapture?.(ev.pointerId);
+        draggingPin = { el:el, pin:p };
       });
 
-      el.addEventListener('dblclick', ()=>{ selectPin(p.id); openPhotoModal(); });
+      on(el,'dblclick',()=>{ selectPin(p.id,true); openPhotoModal(); });
+
+      pinLayer.appendChild(el);
     });
 
-    updatePinDetails();
+    updatePinFields();
   }
 
   function renderPinsList(){
-    pinList.innerHTML='';
-    const pg=currentPage(); if(!pg) return;
-    const q=(inputSearch.value||'').toLowerCase();
-    const typeFilter=filterType.value;
+    pinList.innerHTML = '';
+    const pg = currentPage(); if(!pg) return;
+    const q = (inputSearch.value||'').toLowerCase();
+    const typeFilter = filterType.value;
 
     (pg.pins||[]).forEach(p=>{
-      const line=[p.custom_name||'', p.sign_type, p.room_number, p.room_name, p.building, p.level, p.notes].join(' ').toLowerCase();
+      const line=[p.sign_type,p.custom_name,p.room_number,p.room_name,p.building,p.level,p.notes].join(' ').toLowerCase();
       if(q && !line.includes(q)) return;
       if(typeFilter && p.sign_type!==typeFilter) return;
 
-      const row=document.createElement('div'); row.className='item';
-      const cb=document.createElement('input'); cb.type='checkbox'; cb.dataset.id=p.id; row.appendChild(cb);
-      const nameTxt = p.custom_name ? ` (${p.custom_name})` : '';
-      const txt=document.createElement('div');
-      txt.innerHTML=`<strong>${p.sign_type||'-'}${nameTxt}</strong> • ${p.room_number||'-'} ${p.room_name||''} <span class="muted">[${p.building||'-'}/${p.level||'-'}]</span>`;
-      row.appendChild(txt);
-      const go=document.createElement('button'); go.textContent='Go'; go.onclick=()=>{ selectPin(p.id); }; row.appendChild(go);
-      pinList.appendChild(row);
+      const card = document.createElement('div'); card.className='card';
+      const title = document.createElement('div');
+      title.innerHTML = `<strong>${p.custom_name || p.sign_type || 'Pin'}</strong> <span class="muted">[${p.building||'-'}/${p.level||'-'}]</span>`;
+      card.appendChild(title);
+
+      const row = document.createElement('div'); row.className='row';
+      const go = document.createElement('button'); go.textContent='Go';
+      on(go,'click',()=> selectPin(p.id,true));
+      const openPhotos = document.createElement('button'); openPhotos.textContent='Photos';
+      on(openPhotos,'click',()=>{ selectPin(p.id,true); openPhotoModal(); });
+      row.appendChild(go); row.appendChild(openPhotos);
+      card.appendChild(row);
+
+      pinList.appendChild(card);
     });
   }
 
-  function updatePinDetails(){
-    const p=selectedPin();
-    selId.textContent=p? p.id : 'None';
-    fieldType.value = p ? (p.sign_type || '') : '';
-    fieldRoomNum.value=p?.room_number||'';
-    fieldRoomName.value=p?.room_name||'';
-    fieldBuilding.value=p?.building||'';
-    fieldLevel.value=p?.level||'';
-    fieldNotes.value=p?.notes||'';
-    posLabel.textContent=p? pctLabel(p.x_pct,p.y_pct) : '—';
-    renderWarnings();
-  }
-
-  function renderWarnings(){
-    warnsEl.innerHTML='';
-    const p=selectedPin(); if(!p) return;
-    const list=[];
-    if(['Callbox','Evac','Hall Direct'].includes(p.sign_type) && (p.room_name||'').toUpperCase()!=='ELEV. LOBBY'){
-      list.push('Tip: Room name usually “ELEV. LOBBY”.');
-    }
-    const rn=(p.room_name||'').toUpperCase();
-    if((/ELECTRICAL|DATA/).test(rn) && p.sign_type!=='BOH'){
-      list.push('Recommended BOH for ELECTRICAL/DATA rooms.');
-    }
-    list.forEach(s=>{
-      const t=document.createElement('span'); t.className='tag warn'; t.textContent=s; warnsEl.appendChild(t);
-    });
+  function updatePinFields(){
+    const p = selectedPin();
+    selId.textContent = p ? p.id : 'None';
+    fieldType.value = p?.sign_type || '';
+    fieldCustom.value = p?.custom_name || '';
+    fieldRoomNum.value = p?.room_number || '';
+    fieldRoomName.value = p?.room_name || '';
+    fieldBuilding.value = p?.building || '';
+    fieldLevel.value = p?.level || '';
+    fieldNotes.value = p?.notes || '';
+    posLabel.textContent = p ? `${p.x_pct.toFixed?.(2)||p.x_pct}%, ${p.y_pct.toFixed?.(2)||p.y_pct}%` : '—';
   }
 
   function selectedPin(){
-    const idv=project._sel;
+    const idv = project?._sel;
     if(!idv) return null;
     return findPin(idv);
   }
 
-  function selectPin(idv){
-    project._sel=idv; saveProject(project); renderPins();
-    const el=[...pinLayer.children].find(x=>x.dataset.id===idv);
-    if(el){ el.scrollIntoView({block:'center', inline:'center', behavior:'smooth'}); }
-    const p=findPin(idv);
-    if(p){
-      const pg = pinPage(p.id);
-      if(pg && project._pageId!==pg.id){ project._pageId=pg.id; saveProject(project); renderStage(); renderPins(); drawMeasurements(); }
+  function selectPin(idv, center){
+    project._sel = idv;
+    saveProject(project);
+    renderPins();
+    if(center){
+      const el = [...pinLayer.children].find(x=>x.dataset.id===idv);
+      el?.scrollIntoView({block:'center',inline:'center',behavior:'smooth'});
     }
   }
 
-  /***********************
-   * Measuring (main view)
-   ***********************/
-  function startCalibration(scope){
-    calibFirst=null; measureFirst=null;
-    alert('Calibration: click two points on the page to set real feet.');
-    measureMode=false; btnMeasureToggle.textContent='Measuring: OFF';
-    calibAwait=scope;
-  }
-  function toggleMeasuring(scope){
-    measureMode=!measureMode;
-    if(scope==='main') btnMeasureToggle.textContent = 'Measuring: '+(measureMode?'ON':'OFF');
-    if(!measureMode && mainRubberLine){ measureSvg.removeChild(mainRubberLine); mainRubberLine=null; }
-  }
-  function resetMeasurements(scope){
-    if(scope==='main'){
-      const pg=currentPage(); if(pg){ pg.measurements=[]; }
-      drawMeasurements();
-    }else{
-      const ph = photoState.pin?.photos[photoState.idx];
-      if(ph){ ph.measurements=[]; drawPhotoMeasurements(); }
-    }
-  }
+  /******************
+   * Editing events
+   ******************/
+  // Add Pin toggle (single-click to add next click on stage)
+  let addingPin = false;
+  on(btnAddPin,'click',()=>{
+    addingPin = !addingPin;
+    btnAddPin.textContent = addingPin ? 'Click on page…' : 'Add Pin';
+  });
 
-  function ensureRubberLine(svg){
-    const line=document.createElementNS('http://www.w3.org/2000/svg','line');
-    line.setAttribute('stroke','#22c55e');
-    line.setAttribute('stroke-dasharray','4 3');
-    line.setAttribute('stroke-width','3');
-    return line;
-  }
+  // Stage click to place pin
+  on(stage,'pointerdown',(e)=>{
+    if(!addingPin) return;
+    // ignore clicks on existing pins
+    if(e.target && e.target.classList && e.target.classList.contains('pin')) return;
 
-  on(stage,'pointermove',(e)=>{
-    if(measureMode && measureFirst){
-      const a = { x: measureFirst.x, y: measureFirst.y };
-      const b = toLocal(e);
-      if(!mainRubberLine){
-        mainRubberLine = ensureRubberLine(measureSvg);
-        measureSvg.appendChild(mainRubberLine);
-      }
-      mainRubberLine.setAttribute('x1', a.x); mainRubberLine.setAttribute('y1', a.y);
-      mainRubberLine.setAttribute('x2', b.x); mainRubberLine.setAttribute('y2', b.y);
+    const pt = pctFromEvent(e);
+    commit();
+    const p = makePin(pt.x_pct, pt.y_pct);
+    const pg = currentPage();
+    pg.pins.push(p);
+    saveProject(project);
+    addingPin = false; btnAddPin.textContent = 'Add Pin';
+    renderPins(); renderPinsList();
+    selectPin(p.id,true);
+  });
+
+  // Draggable pins
+  let draggingPin = null;
+  on(pinLayer,'pointermove',(e)=>{
+    if(!draggingPin) return;
+    const pt = pctFromEvent(e);
+    draggingPin.el.style.left = pt.x_pct + '%';
+    draggingPin.el.style.top = pt.y_pct + '%';
+    posLabel.textContent = `${pt.x_pct.toFixed(2)}%, ${pt.y_pct.toFixed(2)}%`;
+  });
+  on(pinLayer,'pointerup',(e)=>{
+    if(!draggingPin) return;
+    const pt = pctFromEvent(e);
+    commit();
+    draggingPin.pin.x_pct = pt.x_pct;
+    draggingPin.pin.y_pct = pt.y_pct;
+    draggingPin.pin.lastEdited = Date.now();
+    saveProject(project);
+    draggingPin = null;
+    renderPinsList();
+  });
+
+  // Field bindings
+  [fieldType,fieldCustom,fieldRoomNum,fieldRoomName,fieldBuilding,fieldLevel,fieldNotes].forEach(el=>{
+    on(el,'input',()=>{
+      const p = selectedPin(); if(!p) return;
+      commit();
+      if(el===fieldType) p.sign_type = el.value || '';
+      if(el===fieldCustom) p.custom_name = el.value || '';
+      if(el===fieldRoomNum) p.room_number = el.value || '';
+      if(el===fieldRoomName) p.room_name = el.value || '';
+      if(el===fieldBuilding) p.building = el.value || '';
+      if(el===fieldLevel) p.level = el.value || '';
+      if(el===fieldNotes) p.notes = el.value || '';
+      p.lastEdited = Date.now();
+      saveProject(project);
+      renderPins();
+      renderPinsList();
+    });
+  });
+
+  on(btnDuplicate,'click',()=>{
+    const p = selectedPin(); if(!p) return;
+    commit();
+    const copy = JSON.parse(JSON.stringify(p));
+    copy.id = id();
+    copy.x_pct = clamp((p.x_pct||50)+2,0,100);
+    copy.y_pct = clamp((p.y_pct||50)+2,0,100);
+    copy.lastEdited = Date.now();
+    currentPage().pins.push(copy);
+    saveProject(project);
+    renderPins(); renderPinsList();
+    selectPin(copy.id,true);
+  });
+
+  on(btnDelete,'click',()=>{
+    const p = selectedPin(); if(!p) return;
+    if(!confirm('Delete selected pin?')) return;
+    commit();
+    const pg = currentPage();
+    pg.pins = (pg.pins||[]).filter(x=>x.id!==p.id);
+    project._sel = null;
+    saveProject(project);
+    renderPins(); renderPinsList();
+    updatePinFields();
+  });
+
+  on(btnClearPins,'click',()=>{
+    if(!currentPage()) return;
+    if(!confirm('Clear ALL pins on this page?')) return;
+    commit();
+    currentPage().pins = [];
+    saveProject(project);
+    renderPins(); renderPinsList();
+    updatePinFields();
+  });
+
+  on(toggleField,'change',()=>{
+    if(!project) return;
+    project.settings.fieldMode = !!toggleField.checked;
+    saveProject(project);
+    renderPins();
+  });
+
+  on(inputSearch,'input',()=>{ renderPins(); renderPinsList(); });
+  on(filterType,'change',()=>{ renderPins(); renderPinsList(); });
+
+  on(inputBuilding,'input',()=>{ projectContext.building = inputBuilding.value; });
+  on(inputLevel,'input',()=>{ projectContext.level = inputLevel.value; });
+
+  /******************
+   * Measuring (main canvas) — draw preview, then prompt length
+   ******************/
+  let measureActive = false;
+  let measureDrag = null; // {start:{x,y}, end:{x,y}}
+  const stagePreview = document.createElementNS('http://www.w3.org/2000/svg','line');
+  stagePreview.setAttribute('stroke','#2ecc71');
+  stagePreview.setAttribute('stroke-width','3');
+  stagePreview.setAttribute('stroke-dasharray','6,6');
+  stagePreview.style.display='none';
+  measureSvg.appendChild(stagePreview);
+
+  // Toggle measure with Shift key while on stage
+  on(stage,'keydown',(e)=>{
+    if(e.key==='Shift'){ measureActive=true; }
+  });
+  on(stage,'keyup',(e)=>{
+    if(e.key==='Shift'){ measureActive=false; stagePreview.style.display='none'; measureDrag=null; }
+  });
+  // Support clicks without keyboard: double-press M to toggle
+  window.addEventListener('keydown',(e)=>{
+    if(e.key.toLowerCase()==='m'){
+      measureActive = !measureActive;
+      if(!measureActive){ stagePreview.style.display='none'; measureDrag=null; }
     }
   });
 
-  on(stage,'click',(e)=>{
-    const page=currentPage(); if(!page) return;
-    const pt=toLocal(e);
+  on(stage,'pointerdown',(e)=>{
+    if(!measureActive) return;
+    e.preventDefault();
+    const r = stageImage.getBoundingClientRect();
+    measureDrag = { start:{x:e.clientX-r.left,y:e.clientY-r.top}, end:{x:e.clientX-r.left,y:e.clientY-r.top} };
+    stagePreview.setAttribute('x1', measureDrag.start.x);
+    stagePreview.setAttribute('y1', measureDrag.start.y);
+    stagePreview.setAttribute('x2', measureDrag.end.x);
+    stagePreview.setAttribute('y2', measureDrag.end.y);
+    stagePreview.style.display = 'block';
+  });
 
-    if(calibAwait==='main'){
-      if(!calibFirst) { calibFirst=pt; return; }
-      const px = dist(calibFirst, pt);
-      const ftInput = prompt('Enter real distance (feet) for calibration:', '10');
-      const ft = ftInput ? parseFloat(ftInput) : NaN;
-      if(ft && ft>0){ page.scalePxPerFt = px/ft; alert(`Calibrated: ${(px/ft).toFixed(2)} px/ft`); }
-      calibFirst=null; calibAwait=null;
-      return;
-    }
+  on(stage,'pointermove',(e)=>{
+    if(!measureActive || !measureDrag) return;
+    const r = stageImage.getBoundingClientRect();
+    measureDrag.end = { x:e.clientX-r.left, y:e.clientY-r.top };
+    stagePreview.setAttribute('x2', measureDrag.end.x);
+    stagePreview.setAttribute('y2', measureDrag.end.y);
+  });
 
-    if(measureMode){
-      if(!measureFirst){ measureFirst = { x: pt.x, y: pt.y }; return; }
-      const start = measureFirst;
-      const end = pt;
-      if(mainRubberLine){ measureSvg.removeChild(mainRubberLine); mainRubberLine=null; }
-      const pxLen = dist(start, end);
-      let ftVal = null;
-      if(page.scalePxPerFt){
-        const autoFt = pxLen / page.scalePxPerFt;
-        const entered = prompt(`Distance (feet). Calibrated value = ${autoFt.toFixed(2)} ft. Press OK to accept or type your own:`, autoFt.toFixed(2));
-        ftVal = entered ? parseFloat(entered) : autoFt;
-      } else {
-        const entered = prompt('Enter distance (feet) for this line:', '10');
-        ftVal = entered ? parseFloat(entered) : NaN;
-      }
-      const m = {
-        id: id(),
-        kind: 'main',
-        points: [ {x:start.x, y:start.y}, {x:end.x, y:end.y} ],
-        feet: (ftVal && !isNaN(ftVal)) ? ftVal : undefined,
-        px: pxLen
-      };
-      page.measurements = page.measurements || [];
-      page.measurements.push(m);
-      measureFirst=null;
+  on(stage,'pointerup',()=>{
+    if(!measureActive || !measureDrag) return;
+    const length = prompt('Enter measured length (ft):','10');
+    if(length){
+      const pg = currentPage();
+      const m = { id:id(), kind:'main', points:[measureDrag.start, measureDrag.end], feet: parseFloat(length)||0 };
+      pg.measurements = pg.measurements || [];
+      pg.measurements.push(m);
+      saveProject(project);
       drawMeasurements();
     }
+    stagePreview.style.display='none';
+    measureDrag = null;
   });
 
   function drawMeasurements(){
-    const page=currentPage();
     while(measureSvg.firstChild) measureSvg.removeChild(measureSvg.firstChild);
-    if(!page||!page.measurements) return;
-    page.measurements.forEach(m=>{
-      const a=toScreen(m.points[0]); const b=toScreen(m.points[1]);
-      const dx=Math.abs(a.x-b.x), dy=Math.abs(a.y-b.y);
-      const color = (dx>dy)? '#ef4444' : (dy>dx)? '#3b82f6' : '#f59e0b';
-      const line=document.createElementNS('http://www.w3.org/2000/svg','line');
-      line.setAttribute('x1',a.x); line.setAttribute('y1',a.y);
-      line.setAttribute('x2',b.x); line.setAttribute('y2',b.y);
-      line.setAttribute('stroke',color);
+    measureSvg.appendChild(stagePreview); // keep preview on top of clears
+    const pg = currentPage(); if(!pg || !pg.measurements) return;
+    pg.measurements.forEach(m=>{
+      const a = m.points[0], b = m.points[1];
+      const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+      line.setAttribute('x1', a.x); line.setAttribute('y1', a.y);
+      line.setAttribute('x2', b.x); line.setAttribute('y2', b.y);
+      line.setAttribute('stroke', '#4cc9f0');
       line.setAttribute('stroke-width','3');
       measureSvg.appendChild(line);
 
-      const midx=(a.x+b.x)/2, midy=(a.y+b.y)/2;
-      const text=document.createElementNS('http://www.w3.org/2000/svg','text');
-      let ft;
-      if(typeof m.feet==='number'){
-        ft = m.feet.toFixed(2)+' ft';
-      } else if(page.scalePxPerFt){
-        ft = (dist(a,b)/page.scalePxPerFt).toFixed(2)+' ft';
-      } else {
-        ft = (dist(a,b).toFixed(0)+' px');
-      }
-      text.setAttribute('x',midx); text.setAttribute('y',midy-6); text.textContent=ft;
-      measureSvg.appendChild(text);
+      const label = document.createElementNS('http://www.w3.org/2000/svg','text');
+      const midx = (a.x+b.x)/2, midy=(a.y+b.y)/2;
+      label.setAttribute('x', midx); label.setAttribute('y', midy-6);
+      label.setAttribute('fill', '#fff');
+      label.setAttribute('stroke', '#000');
+      label.setAttribute('stroke-width', '3');
+      label.textContent = (m.feet||0).toFixed(2)+' ft';
+      measureSvg.appendChild(label);
     });
   }
 
-  /*************************
-   * Photo modal & measure *
-   *************************/
+  /******************
+   * Photo modal + measurement (drag preview, then prompt)
+   ******************/
+  const photoState = { pin:null, idx:0, measure:false };
+  let photoDrag = null; // {start:{x,y}, end:{x,y}}
+  const photoPreview = document.createElementNS('http://www.w3.org/2000/svg','line');
+  photoPreview.setAttribute('stroke','#2ecc71');
+  photoPreview.setAttribute('stroke-width','3');
+  photoPreview.setAttribute('stroke-dasharray','6,6');
+  photoPreview.style.display='none';
+  photoMeasureSvg.appendChild(photoPreview);
+
   function openPhotoModal(){
-    const p=selectedPin(); if(!p) { alert('Select a pin first.'); return; }
-    if(!p.photos.length) { alert('No photos attached.'); return; }
-    photoState.pin=p; photoState.idx=0; showPhoto(); photoModal.style.display='flex';
-    const viewer = photoModal.querySelector('.viewer');
-    if(viewer) viewer.style.overflow = 'auto';
+    const p = selectedPin();
+    if(!p) return alert('Select a pin first.');
+    if(!p.photos || p.photos.length===0) return alert('No photos attached.');
+    photoState.pin = p;
+    photoState.idx = 0;
+    showPhoto();
+    photoModal.classList.add('show');
   }
+  function closePhotoModal(){ photoModal.classList.remove('show'); photoDrag=null; photoPreview.style.display='none'; }
+  on(btnOpenPhoto,'click',()=> openPhotoModal());
+  on(btnPhotoClose,'click',()=> closePhotoModal());
+
   function showPhoto(){
-    const ph=photoState.pin.photos[photoState.idx];
-    photoImg.src=ph.dataUrl;
-    photoPinId.textContent=photoState.pin.id;
-    photoName.textContent=ph.name;
-    photoMeaCount.textContent=(ph.measurements?.length||0);
+    const ph = photoState.pin.photos[photoState.idx];
+    photoImg.src = ph.dataUrl;
+    photoPinId.textContent = photoState.pin.id;
+    photoName.textContent = ph.name || `Photo ${photoState.idx+1}`;
+    photoMeaCount.textContent = (ph.measurements?.length||0);
     drawPhotoMeasurements();
   }
-  function closePhotoModal(){ photoModal.style.display='none'; }
 
   function drawPhotoMeasurements(){
     while(photoMeasureSvg.firstChild) photoMeasureSvg.removeChild(photoMeasureSvg.firstChild);
-    const ph=photoState.pin?.photos[photoState.idx]; if(!ph||!ph.measurements) return;
+    photoMeasureSvg.appendChild(photoPreview);
+    const ph = photoState.pin?.photos[photoState.idx]; if(!ph||!ph.measurements) return;
     ph.measurements.forEach(m=>{
       const a=m.points[0], b=m.points[1];
-      const dx=Math.abs(a.x-b.x), dy=Math.abs(a.y-b.y);
-      const color=(dx>dy)? '#ef4444' : (dy>dx)? '#3b82f6' : '#f59e0b';
       const line=document.createElementNS('http://www.w3.org/2000/svg','line');
       line.setAttribute('x1',a.x); line.setAttribute('y1',a.y);
       line.setAttribute('x2',b.x); line.setAttribute('y2',b.y);
-      line.setAttribute('stroke',color);
-      line.setAttribute('stroke-width','3');
+      line.setAttribute('stroke','#4cc9f0'); line.setAttribute('stroke-width','3');
       photoMeasureSvg.appendChild(line);
 
+      const label=document.createElementNS('http://www.w3.org/2000/svg','text');
       const midx=(a.x+b.x)/2, midy=(a.y+b.y)/2;
-      const text=document.createElementNS('http://www.w3.org/2000/svg','text');
-      let ft;
-      if(typeof m.feet==='number'){
-        ft = m.feet.toFixed(2)+' ft';
-      } else if(ph.scalePxPerFt){
-        const pxLen = Math.hypot(a.x-b.x, a.y-b.y);
-        ft = (pxLen/ph.scalePxPerFt).toFixed(2)+' ft';
-      } else {
-        ft = (Math.hypot(a.x-b.x, a.y-b.y).toFixed(0)+' px');
-      }
-      text.setAttribute('x',midx); text.setAttribute('y',midy-6); text.textContent=ft;
-      photoMeasureSvg.appendChild(text);
+      label.setAttribute('x',midx); label.setAttribute('y',midy-6);
+      label.setAttribute('fill','#fff'); label.setAttribute('stroke','#000'); label.setAttribute('stroke-width','3');
+      label.textContent=(m.feet||0).toFixed(2)+' ft';
+      photoMeasureSvg.appendChild(label);
     });
   }
 
-  on(photoImg,'pointermove',(e)=>{
-    if(!photoState.measure || !photoMeasureFirst) return;
-    const rect = photoImg.getBoundingClientRect();
-    const cur = { x: e.clientX-rect.left, y: e.clientY-rect.top };
-    if(!photoRubberLine){
-      photoRubberLine = ensureRubberLine(photoMeasureSvg);
-      photoMeasureSvg.appendChild(photoRubberLine);
-    }
-    photoRubberLine.setAttribute('x1', photoMeasureFirst.x);
-    photoRubberLine.setAttribute('y1', photoMeasureFirst.y);
-    photoRubberLine.setAttribute('x2', cur.x);
-    photoRubberLine.setAttribute('y2', cur.y);
-  });
-
-  on(btnPhotoClose,'click',()=> closePhotoModal());
   on(btnPhotoMeasure,'click',()=>{
-    photoState.measure=!photoState.measure;
-    btnPhotoMeasure.textContent='Measure: '+(photoState.measure?'ON':'OFF');
-    if(!photoState.measure && photoRubberLine){ photoMeasureSvg.removeChild(photoRubberLine); photoRubberLine=null; photoMeasureFirst=null; }
+    photoState.measure = !photoState.measure;
+    btnPhotoMeasure.textContent = 'Measure: ' + (photoState.measure?'ON':'OFF');
+    if(!photoState.measure){ photoPreview.style.display='none'; photoDrag=null; }
   });
-  on(btnPhotoCalib,'click',()=>{ photoState.calib=null; alert('Photo calibration: click two points on the image, then enter feet.'); });
 
-  on(btnPhotoPrev,'click',()=>{ if(!photoState.pin) return; photoState.idx=Math.max(0,photoState.idx-1); showPhoto(); });
-  on(btnPhotoNext,'click',()=>{ if(!photoState.pin) return; photoState.idx=Math.min(photoState.pin.photos.length-1,photoState.idx+1); showPhoto(); });
+  // Drag on the image to create measurement
+  on(photoMeasureSvg,'pointerdown',(e)=>{
+    if(!photoState.measure) return;
+    const r = photoImg.getBoundingClientRect();
+    photoDrag = { start:{x:e.clientX-r.left,y:e.clientY-r.top}, end:{x:e.clientX-r.left,y:e.clientY-r.top} };
+    photoPreview.setAttribute('x1', photoDrag.start.x);
+    photoPreview.setAttribute('y1', photoDrag.start.y);
+    photoPreview.setAttribute('x2', photoDrag.end.x);
+    photoPreview.setAttribute('y2', photoDrag.end.y);
+    photoPreview.style.display='block';
+  });
+  on(photoMeasureSvg,'pointermove',(e)=>{
+    if(!photoDrag) return;
+    const r = photoImg.getBoundingClientRect();
+    photoDrag.end = { x:e.clientX-r.left, y:e.clientY-r.top };
+    photoPreview.setAttribute('x2', photoDrag.end.x);
+    photoPreview.setAttribute('y2', photoDrag.end.y);
+  });
+  on(photoMeasureSvg,'pointerup',()=>{
+    if(!photoDrag) return;
+    const ph = photoState.pin.photos[photoState.idx];
+    const length = prompt('Enter measured length (ft):','10');
+    if(length){
+      ph.measurements = ph.measurements || [];
+      ph.measurements.push({
+        id:id(), kind:'photo',
+        points:[photoDrag.start, photoDrag.end],
+        feet: parseFloat(length)||0
+      });
+      saveProject(project);
+      drawPhotoMeasurements();
+      photoMeaCount.textContent = ph.measurements.length;
+    }
+    photoPreview.style.display='none';
+    photoDrag = null;
+  });
+
+  on(btnPhotoPrev,'click',()=>{
+    if(!photoState.pin) return;
+    photoState.idx = Math.max(0, photoState.idx-1);
+    showPhoto();
+  });
+  on(btnPhotoNext,'click',()=>{
+    if(!photoState.pin) return;
+    photoState.idx = Math.min(photoState.pin.photos.length-1, photoState.idx+1);
+    showPhoto();
+  });
   on(btnPhotoDelete,'click',()=>{
     if(!photoState.pin) return;
     if(!confirm('Delete this photo?')) return;
-    commit();
-    photoState.pin.photos.splice(photoState.idx,1);
-    photoState.idx=Math.max(0,photoState.idx-1);
+    const phs = photoState.pin.photos;
+    phs.splice(photoState.idx,1);
+    photoState.idx = Math.max(0, photoState.idx-1);
     saveProject(project);
-    if(photoState.pin.photos.length===0){ closePhotoModal(); } else { showPhoto(); }
+    if(phs.length===0) closePhotoModal(); else showPhoto();
   });
   on(btnPhotoDownload,'click',()=>{
-    const ph=photoState.pin?.photos[photoState.idx]; if(!ph) return;
-    downloadFile(ph.name || 'photo.png', dataURLtoBlob(ph.dataUrl));
-  });
-
-  on(photoMeasureSvg,'click',(e)=>{
     const ph = photoState.pin?.photos[photoState.idx]; if(!ph) return;
-    const rect = photoImg.getBoundingClientRect();
-    const pt = { x: e.clientX-rect.left, y:e.clientY-rect.top };
-
-    if(photoState.calib===null && e.isTrusted){
-      photoState.calib = { x: pt.x, y: pt.y };
-      return;
-    }
-    if(photoState.calib){
-      const px = Math.hypot(photoState.calib.x-pt.x, photoState.calib.y-pt.y);
-      const ft = parseFloat(prompt('Enter real distance (feet) for calibration:', '10')) || 10;
-      ph.measurements = ph.measurements || [];
-      ph.scalePxPerFt = px/ft;
-      photoState.calib=null;
-      drawPhotoMeasurements();
-      return;
-    }
+    downloadFile(ph.name||'photo.png', dataURLtoBlob(ph.dataUrl));
   });
 
-  on(photoImg,'click',(e)=>{
-    if(!photoState.measure) return;
-    const ph=photoState.pin?.photos[photoState.idx]; if(!ph) return;
-    const rect = photoImg.getBoundingClientRect();
-    const pt={x:e.clientX-rect.left, y:e.clientY-rect.top};
-
-    if(!photoMeasureFirst){
-      photoMeasureFirst = { x: pt.x, y: pt.y };
-      return;
-    }
-    const start = photoMeasureFirst;
-    const end = pt;
-    if(photoRubberLine){ photoMeasureSvg.removeChild(photoRubberLine); photoRubberLine=null; }
-    const pxLen = Math.hypot(start.x-end.x, start.y-end.y);
-
-    let ftVal = null;
-    if(ph.scalePxPerFt){
-      const autoFt = pxLen / ph.scalePxPerFt;
-      const entered = prompt(`Distance (feet). Calibrated value = ${autoFt.toFixed(2)} ft. Press OK to accept or type your own:`, autoFt.toFixed(2));
-      ftVal = entered ? parseFloat(entered) : autoFt;
-    } else {
-      const entered = prompt('Enter distance (feet) for this line:', '10');
-      ftVal = entered ? parseFloat(entered) : NaN;
-    }
-
-    const m={
-      id: id(),
-      kind: 'photo',
-      points: [ {x:start.x, y:start.y}, {x:end.x, y:end.y} ],
-      feet: (ftVal && !isNaN(ftVal)) ? ftVal : undefined,
-      px: pxLen
-    };
-    ph.measurements = ph.measurements || [];
-    ph.measurements.push(m);
-    photoMeasureFirst=null;
-    drawPhotoMeasurements();
-    photoMeaCount.textContent = String(ph.measurements.length);
-  });
-
-  /****************
-   * CSV / XLSX / ZIP
-   ****************/
-  function toRows(){
-    const rows=[];
-    project.pages.forEach(pg=> (pg.pins||[]).forEach(p=> rows.push({
-      id: p.id,
-      sign_type: p.sign_type || '',
-      custom_name: p.custom_name || '',
-      room_number: p.room_number || '',
-      room_name: p.room_name || '',
-      building: p.building || '',
-      level: p.level || '',
-      x_pct: fix(p.x_pct),
-      y_pct: fix(p.y_pct),
-      notes: p.notes || '',
-      page_name: pg.name,
-      last_edited: new Date(p.lastEdited || project.updatedAt).toISOString()
-    })));
-    rows.sort((a,b)=> (a.building||'').localeCompare(b.building||'')
-      || (a.level||'').localeCompare(b.level||'')
-      || a.room_number.localeCompare(b.room_number, undefined, {numeric:true,sensitivity:'base'}) );
-    return rows;
-  }
-
-  function exportCSV(){
-    const rows = toRows();
-    const csv=[Object.keys(rows[0]||{}).join(','), ...rows.map(r=>Object.values(r).map(v=>csvEscape(v)).join(','))].join('\n');
-    downloadText(project.name.replace(/\W+/g,'_')+"_signage.csv", csv);
-  }
-
-  function exportXLSX(){
-    const rows = toRows(); const wb = XLSX.utils.book_new();
-    const info=[[ 'Project', project.name ], [ 'Exported', new Date().toLocaleString() ], [ 'Total Signs', rows.length ], [ 'Total Pages', project.pages.length ]];
-    const counts = {}; rows.forEach(r=> counts[r.sign_type]=(counts[r.sign_type]||0)+1 );
-    info.push([]); info.push(['Breakdown']); Object.entries(counts).forEach(([k,v])=> info.push([k,v]));
-    const wsInfo = XLSX.utils.aoa_to_sheet(info);
-    const ws = XLSX.utils.json_to_sheet(rows, {header: Object.keys(rows[0]||{})});
-    XLSX.utils.book_append_sheet(wb, wsInfo, 'Project Info'); XLSX.utils.book_append_sheet(wb, ws, 'Signage');
-    const out = XLSX.write(wb, {bookType:'xlsx', type:'array'});
-    downloadFile(project.name.replace(/\W+/g,'_')+'_signage.xlsx', new Blob([out], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
-  }
-
-  async function exportZIP(){
-    const rows=toRows(); const zip=new JSZip();
-    zip.file('signage.csv', [Object.keys(rows[0]||{}).join(','), ...rows.map(r=>Object.values(r).map(v=>csvEscape(v)).join(','))].join('\n'));
-    project.pages.forEach(pg=>{
-      (pg.pins||[]).forEach(pin=>{
-        (pin.photos||[]).forEach((ph, idx)=>{
-          const folder=zip.folder(`photos/${pin.id}`);
-          folder.file(ph.name || `photo_${idx+1}.png`, dataURLtoArrayBuffer(ph.dataUrl));
-        });
-      });
-    });
-    const blob = await zip.generateAsync({type:'blob'});
-    downloadFile(project.name.replace(/\W+/g,'_')+'_export.zip', blob);
-  }
-
-  function importCSV(text){
-    const lines = text.split(/\r?\n/).filter(Boolean);
-    if(lines.length<2) return;
-    const hdr=lines[0].split(',').map(h=>h.trim()); commit();
-    for(let i=1;i<lines.length;i++){
-      const cells = parseCsvLine(lines[i]); const row={};
-      hdr.forEach((h,idx)=> row[h]=cells[idx]||'');
-      const p = makePin(parseFloat(row.x_pct)||50, parseFloat(row.y_pct)||50);
-      p.sign_type=row.sign_type||'';
-      p.custom_name=row.custom_name||'';
-      p.room_number=row.room_number||'';
-      p.room_name=row.room_name||'';
-      p.building=row.building||'';
-      p.level=row.level||'';
-      p.notes=row.notes||'';
-      const pg=currentPage(); if(pg) pg.pins.push(p);
-    }
-    saveProject(project); renderPins(); renderPinsList(); alert('Imported rows into current page.');
-  }
-
-  /***********************
-   * Toolbar wiring & nav
-   ***********************/
-  projects = loadProjects();
-  currentProjectId = localStorage.getItem('survey:lastOpenProjectId') || null;
-  project = currentProjectId ? projects.find(p=>p.id===currentProjectId) : null;
-  if(!project){ project = newProject('Untitled Project'); saveProject(project); }
-  selectProject(project.id);
-
-  function renderProjectsList(){
-    projectsListEl.innerHTML = '';
-    projects.forEach(p=>{
-      const row = document.createElement('div');
-      row.className = 'project-item';
-      const left = document.createElement('div');
-      left.innerHTML = `<div><strong>${p.name}</strong></div><div class="meta">Updated ${new Date(p.updatedAt).toLocaleString()}</div>`;
-      const actions = document.createElement('div');
-      const openBtn = document.createElement('button'); openBtn.textContent = 'Open';
-      const dupBtn = document.createElement('button'); dupBtn.textContent = 'Duplicate';
-      const delBtn = document.createElement('button'); delBtn.textContent = 'Delete';
-      openBtn.onclick = ()=>{ selectProject(p.id); showScreen('editor'); };
-      dupBtn.onclick = ()=>{
-        const name = prompt('Duplicate as name:', p.name+' (copy)'); if(!name) return;
-        const copy = JSON.parse(JSON.stringify(p)); copy.id=id(); copy.name=name; copy.createdAt=Date.now(); copy.updatedAt=Date.now();
-        projects.push(copy); localStorage.setItem('survey:projects', JSON.stringify(projects)); renderProjectsList();
-      };
-      delBtn.onclick = ()=>{
-        if(!confirm('Delete this project?')) return;
-        projects = projects.filter(x=>x.id!==p.id);
-        localStorage.setItem('survey:projects', JSON.stringify(projects));
-        if(project && project.id===p.id){
-          if(projects[0]) selectProject(projects[0].id);
-        }
-        renderProjectsList();
-      };
-      actions.appendChild(openBtn); actions.appendChild(dupBtn); actions.appendChild(delBtn);
-      row.appendChild(left); row.appendChild(actions);
-      projectsListEl.appendChild(row);
-    });
-  }
-  renderProjectsList();
-
-  // Top nav
-  on(navHome, ()=> showScreen('home'));
-  on(navProjects, ()=> { renderProjectsList(); showScreen('projects'); });
-  on(navEditor, ()=> showScreen('editor'));
-
-  // Home buttons
-  on(homeNew, ()=>{
-    const name=prompt('New project name?','New Project'); if(!name) return;
-    commit(); const p=newProject(name); saveProject(p); selectProject(p.id); showScreen('editor');
-  });
-  on(homeOpen, ()=> { renderProjectsList(); showScreen('projects'); });
-  on(homeEditor, ()=> showScreen('editor'));
-
-  // Toolbar actions
-  on(btnNew,'click',()=>{ const name=prompt('New project name?','New Project'); if(!name) return; commit(); const p=newProject(name); saveProject(p); selectProject(p.id); });
-  on(btnOpen,'click',()=>{ renderProjectsList(); showScreen('projects'); });
-  on(btnSaveAs,'click',()=>{ const name=prompt('Duplicate as name:', project.name+' (copy)'); if(!name) return; commit(); const copy=JSON.parse(JSON.stringify(project)); copy.id=id(); copy.name=name; copy.createdAt=Date.now(); copy.updatedAt=Date.now(); saveProject(copy); selectProject(copy.id); });
-  on(btnRename,'click',()=>{ const name=prompt('Rename project:', project.name); if(!name) return; commit(); project.name=name; saveProject(project); renderProjectLabel(); });
-
-  on(btnUpload,'click',()=> inputUpload.click());
-  on(inputUpload,'change', async (e)=>{
-    const files=[...e.target.files]; if(!files.length) return; commit();
-    for(const f of files){
-      if(f.type==='application/pdf'){ await addPdfPages(f); }
-      else if(f.type.startsWith('image/')){ const url=URL.createObjectURL(f); const name=f.name.replace(/\.[^.]+$/,''); addImagePage(url,name); }
-    }
-    renderAll();
-  });
-
-  on(btnExportCSV,'click',exportCSV);
-  on(btnExportXLSX,'click',exportXLSX);
-  on(btnExportZIP,'click',exportZIP);
-
-  on(btnImportCSV,'click',()=> inputImportCSV.click());
-  on(inputImportCSV,'change', async (e)=>{
-    const f=e.target.files && e.target.files[0]; if(!f) return; const text=await f.text(); importCSV(text);
-  });
-
-  // Pin actions
-  on(btnClearPins,'click',()=>{ if(!confirm('Clear ALL pins on this page?')) return; commit(); const pg=currentPage(); if(pg){ pg.pins=[]; } renderAll(); });
-  on(btnAddPin,'click',()=>{ addingPin=!addingPin; btnAddPin.classList.toggle('ok', addingPin); });
-
-  on(fieldType,'change',()=>{
-    const pin = selectedPin(); if(!pin) return;
-    if(fieldType.value==='__CUSTOM__'){
-      const val = prompt('Enter custom pin name (label):','');
-      if(val && val.trim()){
-        pin.custom_name = val.trim();
-        if(!pin.sign_type) pin.sign_type = '';
-      }
-      fieldType.value = pin.sign_type || '';
-    } else {
-      pin.sign_type = fieldType.value || '';
-    }
-    pin.lastEdited = Date.now(); saveProject(project); renderPins(); renderPinsList(); updatePinDetails();
-  });
-
-  [fieldRoomNum, fieldRoomName, fieldBuilding, fieldLevel, fieldNotes].forEach(el=> on(el,'input',()=>{
-    const pin = selectedPin(); if(!pin) return; commit();
-    if(el===fieldRoomNum) pin.room_number = el.value || '';
-    if(el===fieldRoomName) pin.room_name = el.value || '';
-    if(el===fieldBuilding) pin.building = el.value || '';
-    if(el===fieldLevel) pin.level = el.value || '';
-    if(el===fieldNotes) pin.notes = el.value || '';
-    pin.lastEdited=Date.now(); saveProject(project); renderPins(); renderWarnings(); renderPinsList();
-  }));
-
+  // Add photos to pin
   on(btnAddPhoto,'click',()=> inputPhoto.click());
   on(inputPhoto,'change', async (e)=>{
-    const pin = selectedPin(); if(!pin) { alert('Select a pin first.'); return; }
-    const files=[...e.target.files]; if(!files.length) return; commit();
-    for(const f of files){
-      const url=await fileToDataURL(f);
-      pin.photos.push({ name: f.name, dataUrl: url, measurements: [] });
-    }
-    pin.lastEdited=Date.now(); saveProject(project); renderPinsList(); alert('Photo(s) added.');
-  });
-
-  on(btnOpenPhoto,'click',openPhotoModal);
-  on(btnDuplicate,'click',()=>{
-    const pin=selectedPin(); if(!pin) return; commit();
-    const p=JSON.parse(JSON.stringify(pin));
-    p.id=id(); p.x_pct=Math.min(100,p.x_pct+2); p.y_pct=Math.min(100,p.y_pct+2);
-    p.lastEdited=Date.now();
-    const pg=currentPage(); if(pg){ pg.pins.push(p); }
-    saveProject(project); renderPins(); renderPinsList(); selectPin(p.id);
-  });
-  on(btnDelete,'click',()=>{
-    const pin=selectedPin(); if(!pin) return;
-    if(!confirm('Delete selected pin?')) return; commit();
-    const pg=currentPage(); if(!pg) return;
-    pg.pins=pg.pins.filter(x=>x.id!==pin.id);
-    saveProject(project); renderPins(); renderPinsList(); project._sel=null; updatePinDetails();
-  });
-
-  on(toggleStrict,'change',()=>{ project.settings.strictRules = !!toggleStrict.checked; saveProject(project); renderWarnings(); });
-  on(toggleField,'change',()=>{ project.settings.fieldMode = !!toggleField.checked; saveProject(project); renderPins(); });
-  on(inputBuilding,'input',()=>{ projectContext.building = inputBuilding.value; });
-  on(inputLevel,'input',()=>{ projectContext.level = inputLevel.value; });
-  on(inputSearch,'input',()=> renderPinsList());
-  on(filterType,'change',()=> renderPins());
-
-  // Stage add & dragging
-  on(stage,'pointerdown',(e)=>{
-    if(!addingPin) return;
-    if(e.target && e.target.classList && e.target.classList.contains('pin')) return;
-    const pct = toPctCoords(e);
+    const p = selectedPin(); if(!p) return alert('Select a pin first.');
+    const files = [...e.target.files]; if(!files.length) return;
     commit();
-    const p = makePin(pct.x_pct, pct.y_pct);
-    const pg=currentPage(); if(pg){ pg.pins.push(p); }
-    saveProject(project); renderPins(); renderPinsList(); selectPin(p.id);
-    addingPin=false; btnAddPin.classList.remove('ok');
-  });
-
-  document.addEventListener('pointermove', (e)=>{
-    if(!dragging || !dragData) return;
-    e.preventDefault();
-    const pin = findPin(dragging.dataset.id); if(!pin) return;
-    const x = Math.min(Math.max(dragData.rectLeft, e.clientX), dragData.rectLeft+dragData.rectW);
-    const y = Math.min(Math.max(dragData.rectTop, e.clientY), dragData.rectTop+dragData.rectH);
-    const pct = toPctCoordsFromPoint(x, y);
-    dragging.style.left = pct.x_pct+'%';
-    dragging.style.top = pct.y_pct+'%';
-    posLabel.textContent = pctLabel(pct.x_pct, pct.y_pct);
-  });
-
-  document.addEventListener('pointerup', (e)=>{
-    if(!dragging || !dragData) return;
-    const pin = findPin(dragging.dataset.id);
-    if(pin){
-      const pct = toPctCoordsFromPoint(e.clientX, e.clientY);
-      commit();
-      pin.x_pct = pct.x_pct;
-      pin.y_pct = pct.y_pct;
-      pin.lastEdited = Date.now();
-      saveProject(project); renderPinsList();
+    for(const f of files){
+      const fr = await toDataURL(f);
+      p.photos.push({ name:f.name, dataUrl:fr, measurements:[] });
     }
-    dragging.releasePointerCapture?.(e.pointerId);
-    dragging=null; dragData=null;
+    p.lastEdited = Date.now();
+    saveProject(project);
+    renderPinsList();
+    inputPhoto.value = '';
+    alert('Photo(s) added.');
   });
 
-  // Measure toolbar
-  on(btnCalibrate,'click',()=> startCalibration('main'));
-  on(btnMeasureToggle,'click',()=> toggleMeasuring('main'));
-  on(btnMeasureReset,'click',()=> resetMeasurements('main'));
-
-  // Undo/Redo
-  function snapshot(){ return JSON.stringify(project); }
-  function loadSnapshot(s){
-    project=JSON.parse(s);
-    const i=projects.findIndex(p=>p.id===project.id);
-    if(i>=0) projects[i]=project; else projects.push(project);
-    localStorage.setItem('survey:projects', JSON.stringify(projects));
-    localStorage.setItem('survey:lastOpenProjectId', project.id);
+  function toDataURL(file){
+    return new Promise((res,rej)=>{
+      const r = new FileReader();
+      r.onload = () => res(r.result);
+      r.onerror = rej;
+      r.readAsDataURL(file);
+    });
   }
-  function commit(){ UNDO.push(snapshot()); if(UNDO.length>MAX_UNDO) UNDO.shift(); REDO.length=0; }
-  function undo(){ if(!UNDO.length) return; REDO.push(snapshot()); const s=UNDO.pop(); loadSnapshot(s); renderAll(); }
-  function redo(){ if(!REDO.length) return; UNDO.push(snapshot()); const s=REDO.pop(); loadSnapshot(s); renderAll(); }
-  on(btnUndo,'click',undo);
-  on(btnRedo,'click',redo);
+  function dataURLtoBlob(dataURL){
+    const parts = dataURL.split(',');
+    const header = parts[0] || '';
+    const match = header.match(/:(.*?);/);
+    const mime = (match && match[1]) || 'image/png';
+    const bstr = atob(parts[1]||'');
+    const len = bstr.length;
+    const u8 = new Uint8Array(len);
+    for(let i=0;i<len;i++) u8[i] = bstr.charCodeAt(i);
+    return new Blob([u8], {type:mime});
+  }
+  function downloadFile(name, blob){
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download=name;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 700);
+  }
 
-  // Shortcuts
+  /******************
+   * Keyboard niceties
+   ******************/
   window.addEventListener('keydown',(e)=>{
-    if((e.ctrlKey||e.metaKey) && !e.shiftKey && e.key.toLowerCase()==='z'){ e.preventDefault(); undo(); }
-    if((e.ctrlKey||e.metaKey) && e.shiftKey && e.key.toLowerCase()==='z'){ e.preventDefault(); redo(); }
-    if(e.key==='Delete'){ const p=selectedPin(); if(p){ commit(); const pg=currentPage(); if(pg){ pg.pins=pg.pins.filter(x=>x.id!==p.id); } saveProject(project); renderPins(); renderPinsList(); project._sel=null; updatePinDetails(); } }
+    // Arrow nudging selected pin
     if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)){
-      const p=selectedPin(); if(!p) return; e.preventDefault(); commit();
-      const delta = project.settings.fieldMode? 0.5 : 0.2;
-      if(e.key==='ArrowUp') p.y_pct=Math.max(0,p.y_pct-delta);
-      if(e.key==='ArrowDown') p.y_pct=Math.min(100,p.y_pct+delta);
-      if(e.key==='ArrowLeft') p.x_pct=Math.max(0,p.x_pct-delta);
-      if(e.key==='ArrowRight') p.x_pct=Math.min(100,p.x_pct+delta);
-      p.lastEdited=Date.now(); saveProject(project); renderPins(); updatePinDetails();
+      const p = selectedPin(); if(!p) return;
+      e.preventDefault();
+      const delta = project.settings.fieldMode ? 0.5 : 0.2;
+      if(e.key==='ArrowUp') p.y_pct = clamp(p.y_pct - delta, 0, 100);
+      if(e.key==='ArrowDown') p.y_pct = clamp(p.y_pct + delta, 0, 100);
+      if(e.key==='ArrowLeft') p.x_pct = clamp(p.x_pct - delta, 0, 100);
+      if(e.key==='ArrowRight') p.x_pct = clamp(p.x_pct + delta, 0, 100);
+      p.lastEdited = Date.now();
+      saveProject(project);
+      renderPins();
+      updatePinFields();
     }
   });
 
-  // Initial render & observers
-  renderAll();
-  const ro=new ResizeObserver(()=>{
-    measureSvg.setAttribute('width', stage.clientWidth);
-    measureSvg.setAttribute('height', stage.clientHeight);
-  });
-  if(stage) ro.observe(stage);
+  /******************
+   * First load
+   ******************/
+  // Open last project if available, otherwise stay on Home
+  const last = localStorage.getItem('survey:lastOpenProjectId');
+  if(last && projects.find(p=>p.id===last)){
+    selectProject(last);
+  } else {
+    showScreen('home');
+  }
 });
