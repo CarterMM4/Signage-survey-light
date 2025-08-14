@@ -8,7 +8,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function id(){ return Math.random().toString(36).slice(2,10); }
   function clamp(n,min,max){ return Math.max(min, Math.min(max, n)); }
-  function fix(n){ return typeof n==='number'? +Number(n||0).toFixed(3):'' }
   function dist(a,b){ const dx=a.x-b.x, dy=a.y-b.y; return Math.sqrt(dx*dx+dy*dy); }
 
   /******************
@@ -23,12 +22,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if(which==='home') screenHome.classList.add('show');
     if(which==='projects') screenProjects.classList.add('show');
     if(which==='editor') screenEditor.classList.add('show');
+    if(which==='home') renderHomeRecent();
   }
 
   on($('navHome'),'click',()=> showScreen('home'));
   on($('navProjects'),'click',()=> { renderProjectsGrid(); showScreen('projects'); });
   on($('navEditor'),'click',()=> showScreen('editor'));
-  on($('homeNew'),'click',()=> { createProjectFlow(); });
+  on($('homeNew'),'click',()=> createProjectFlow());
   on($('homeOpen'),'click',()=> { renderProjectsGrid(); showScreen('projects'); });
 
   /******************
@@ -50,11 +50,6 @@ document.addEventListener('DOMContentLoaded', () => {
   let project = null; // current project object
   const projectContext = { building:'', level:'' };
 
-  // Undo/redo if you want it later
-  const UNDO = []; const REDO = []; const MAX_UNDO = 50;
-  function snapshot(){ return JSON.stringify(project); }
-  function commit(){ UNDO.push(snapshot()); if(UNDO.length>MAX_UNDO) UNDO.shift(); REDO.length=0; }
-
   function loadProjects(){
     try{ return JSON.parse(localStorage.getItem('survey:projects')||'[]'); } catch { return []; }
   }
@@ -69,12 +64,14 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   function newProject(name){
     return {
-      id:id(), name:name, createdAt:Date.now(), updatedAt:Date.now(),
-      pages:[],
-      settings:{ fieldMode:false, strictRules:false }
+      id: id(),
+      name: name,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      pages: [],
+      settings: { fieldMode: false }
     };
   }
-
   function selectProject(pid){
     const found = projects.find(p=>p.id===pid);
     if(!found){ alert('Project not found.'); return; }
@@ -82,6 +79,33 @@ document.addEventListener('DOMContentLoaded', () => {
     localStorage.setItem('survey:lastOpenProjectId', pid);
     renderEditorAll();
     showScreen('editor');
+  }
+
+  /******************
+   * HOME – recent projects
+   ******************/
+  const homeRecent = $('homeRecent');
+  function renderHomeRecent(){
+    projects = loadProjects();
+    homeRecent.innerHTML = '';
+    projects
+      .slice()
+      .sort((a,b)=> b.updatedAt - a.updatedAt)
+      .slice(0,6)
+      .forEach(p=>{
+        const card = document.createElement('div'); card.className='card';
+        const h = document.createElement('h4'); h.textContent=p.name; card.appendChild(h);
+        const meta = document.createElement('div'); meta.className='muted';
+        const pinCount = (p.pages||[]).reduce((acc,pg)=>acc+(pg.pins?pg.pins.length:0),0);
+        meta.textContent = `Pages: ${p.pages.length} • Pins: ${pinCount}`;
+        card.appendChild(meta);
+        const row = document.createElement('div'); row.className='spaced';
+        const open = document.createElement('button'); open.textContent='Open'; open.className='btn-primary';
+        on(open,'click',()=> selectProject(p.id));
+        row.appendChild(open);
+        card.appendChild(row);
+        homeRecent.appendChild(card);
+      });
   }
 
   /******************
@@ -94,36 +118,33 @@ document.addEventListener('DOMContentLoaded', () => {
   function renderProjectsGrid(){
     const q = (projSearch.value||'').toLowerCase();
     projects = loadProjects();
-
     projectsGrid.innerHTML = '';
     projects
       .filter(p=>!q || p.name.toLowerCase().includes(q))
       .sort((a,b)=> b.updatedAt - a.updatedAt)
       .forEach(p=>{
-        const card = document.createElement('div');
-        card.className='card';
+        const card = document.createElement('div'); card.className='card';
         const h = document.createElement('h4'); h.textContent = p.name; card.appendChild(h);
-        const meta = document.createElement('div');
-        meta.className='muted';
-        const pinCount = (p.pages||[]).reduce((acc,pg)=>acc + (pg.pins?pg.pins.length:0),0);
+        const meta = document.createElement('div'); meta.className='muted';
+        const pinCount = (p.pages||[]).reduce((acc,pg)=>acc+(pg.pins?pg.pins.length:0),0);
         meta.textContent = `Pages: ${p.pages.length} • Pins: ${pinCount}`;
         card.appendChild(meta);
 
-        const row = document.createElement('div'); row.className='row';
+        const row = document.createElement('div'); row.className='spaced';
         const openBtn = document.createElement('button'); openBtn.textContent='Open'; openBtn.className='btn-primary';
         on(openBtn,'click',()=> selectProject(p.id));
         const renameBtn = document.createElement('button'); renameBtn.textContent='Rename';
         on(renameBtn,'click',()=>{
           const name = prompt('Rename project:', p.name);
           if(!name) return;
-          p.name = name; saveProject(p); renderProjectsGrid();
+          p.name = name; saveProject(p); renderProjectsGrid(); renderHomeRecent();
         });
         const delBtn = document.createElement('button'); delBtn.textContent='Delete';
         on(delBtn,'click',()=>{
           if(!confirm('Delete this project?')) return;
           projects = projects.filter(x=>x.id!==p.id);
           saveProjectsList();
-          renderProjectsGrid();
+          renderProjectsGrid(); renderHomeRecent();
         });
         row.appendChild(openBtn); row.appendChild(renameBtn); row.appendChild(delBtn);
         card.appendChild(row);
@@ -131,6 +152,7 @@ document.addEventListener('DOMContentLoaded', () => {
       });
   }
 
+  on($('btnCreateProj'),'click',()=> createProjectFlow());
   function createProjectFlow(){
     const name = prompt('Project name?','New Project');
     if(!name) return;
@@ -138,7 +160,6 @@ document.addEventListener('DOMContentLoaded', () => {
     saveProject(p);
     selectProject(p.id);
   }
-  on($('btnCreateProj'),'click',()=> createProjectFlow());
 
   /******************
    * Editor DOM refs
@@ -179,6 +200,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnAddPhoto = $('btnAddPhoto');
   const inputPhoto = $('inputPhoto');
 
+  // Measure controls
+  const btnMeasureToggle = $('btnMeasureToggle');
+  const btnMeasureClear = $('btnMeasureClear');
+
   // Photo modal
   const photoModal = $('photoModal');
   const photoImg = $('photoImg');
@@ -203,18 +228,18 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   function makePin(x_pct,y_pct){
     return {
-      id:id(),
-      sign_type:'',
-      custom_name:'',
-      room_number:'',
-      room_name:'',
+      id: id(),
+      sign_type: '',
+      custom_name: '',
+      room_number: '',
+      room_name: '',
       building: inputBuilding.value || projectContext.building || '',
       level: inputLevel.value || projectContext.level || '',
-      x_pct:x_pct,
-      y_pct:y_pct,
-      notes:'',
-      photos:[],
-      lastEdited:Date.now()
+      x_pct: x_pct,
+      y_pct: y_pct,
+      notes: '',
+      photos: [],
+      lastEdited: Date.now()
     };
   }
   function findPin(idv){
@@ -233,7 +258,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if(!project) return;
     const files = [...e.target.files];
     if(!files.length) return;
-    commit();
     for(const f of files){
       if(f.type==='application/pdf'){ await addPdfPages(f); }
       else if(f.type.startsWith('image/')){
@@ -272,14 +296,14 @@ document.addEventListener('DOMContentLoaded', () => {
       await page.render({canvasContext:ctx, viewport:viewport}).promise;
       const dataUrl = canvas.toDataURL('image/png');
       const pg = {
-        id:id(),
+        id: id(),
         name: `${file.name.replace(/\.[^.]+$/,'')} · p${i}`,
-        kind:'pdf',
-        pdfPage:i,
-        blobUrl:dataUrl,
-        pins:[],
-        measurements:[],
-        updatedAt:Date.now()
+        kind: 'pdf',
+        pdfPage: i,
+        blobUrl: dataUrl,
+        pins: [],
+        measurements: [],
+        updatedAt: Date.now()
       };
       project.pages.push(pg);
     }
@@ -309,6 +333,7 @@ document.addEventListener('DOMContentLoaded', () => {
     renderPins();
     renderPinsList();
     toggleField.checked = !!project.settings.fieldMode;
+    drawMeasurements();
   }
 
   function renderProjectLabel(){
@@ -365,11 +390,10 @@ document.addEventListener('DOMContentLoaded', () => {
       el.textContent = label;
       el.style.left = p.x_pct + '%';
       el.style.top = p.y_pct + '%';
-      el.style.background = SIGN_TYPES[p.sign_type] || '#44d983';
-      el.style.padding = fieldMode? '.32rem .6rem' : '.22rem .45rem';
-      el.style.fontSize = fieldMode? '0.95rem' : '0.78rem';
+      el.style.background = SIGN_TYPES[p.sign_type] || '#2ecc71';
+      el.style.padding = fieldMode? '.36rem .68rem' : '.28rem .6rem';
+      el.style.fontSize = fieldMode? '0.98rem' : '0.82rem';
 
-      // drag support
       on(el,'pointerdown',(ev)=>{
         ev.preventDefault();
         selectPin(p.id,false);
@@ -401,7 +425,7 @@ document.addEventListener('DOMContentLoaded', () => {
       title.innerHTML = `<strong>${p.custom_name || p.sign_type || 'Pin'}</strong> <span class="muted">[${p.building||'-'}/${p.level||'-'}]</span>`;
       card.appendChild(title);
 
-      const row = document.createElement('div'); row.className='row';
+      const row = document.createElement('div'); row.className='spaced';
       const go = document.createElement('button'); go.textContent='Go';
       on(go,'click',()=> selectPin(p.id,true));
       const openPhotos = document.createElement('button'); openPhotos.textContent='Photos';
@@ -423,7 +447,7 @@ document.addEventListener('DOMContentLoaded', () => {
     fieldBuilding.value = p?.building || '';
     fieldLevel.value = p?.level || '';
     fieldNotes.value = p?.notes || '';
-    posLabel.textContent = p ? `${p.x_pct.toFixed?.(2)||p.x_pct}%, ${p.y_pct.toFixed?.(2)||p.y_pct}%` : '—';
+    posLabel.textContent = p ? `${Number(p.x_pct).toFixed(2)}%, ${Number(p.y_pct).toFixed(2)}%` : '—';
   }
 
   function selectedPin(){
@@ -443,23 +467,18 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   /******************
-   * Editing events
+   * Editing & Pins
    ******************/
-  // Add Pin toggle (single-click to add next click on stage)
   let addingPin = false;
   on(btnAddPin,'click',()=>{
     addingPin = !addingPin;
     btnAddPin.textContent = addingPin ? 'Click on page…' : 'Add Pin';
   });
 
-  // Stage click to place pin
   on(stage,'pointerdown',(e)=>{
     if(!addingPin) return;
-    // ignore clicks on existing pins
     if(e.target && e.target.classList && e.target.classList.contains('pin')) return;
-
     const pt = pctFromEvent(e);
-    commit();
     const p = makePin(pt.x_pct, pt.y_pct);
     const pg = currentPage();
     pg.pins.push(p);
@@ -469,7 +488,7 @@ document.addEventListener('DOMContentLoaded', () => {
     selectPin(p.id,true);
   });
 
-  // Draggable pins
+  // Dragging pins
   let draggingPin = null;
   on(pinLayer,'pointermove',(e)=>{
     if(!draggingPin) return;
@@ -481,7 +500,6 @@ document.addEventListener('DOMContentLoaded', () => {
   on(pinLayer,'pointerup',(e)=>{
     if(!draggingPin) return;
     const pt = pctFromEvent(e);
-    commit();
     draggingPin.pin.x_pct = pt.x_pct;
     draggingPin.pin.y_pct = pt.y_pct;
     draggingPin.pin.lastEdited = Date.now();
@@ -494,7 +512,6 @@ document.addEventListener('DOMContentLoaded', () => {
   [fieldType,fieldCustom,fieldRoomNum,fieldRoomName,fieldBuilding,fieldLevel,fieldNotes].forEach(el=>{
     on(el,'input',()=>{
       const p = selectedPin(); if(!p) return;
-      commit();
       if(el===fieldType) p.sign_type = el.value || '';
       if(el===fieldCustom) p.custom_name = el.value || '';
       if(el===fieldRoomNum) p.room_number = el.value || '';
@@ -511,7 +528,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   on(btnDuplicate,'click',()=>{
     const p = selectedPin(); if(!p) return;
-    commit();
     const copy = JSON.parse(JSON.stringify(p));
     copy.id = id();
     copy.x_pct = clamp((p.x_pct||50)+2,0,100);
@@ -526,7 +542,6 @@ document.addEventListener('DOMContentLoaded', () => {
   on(btnDelete,'click',()=>{
     const p = selectedPin(); if(!p) return;
     if(!confirm('Delete selected pin?')) return;
-    commit();
     const pg = currentPage();
     pg.pins = (pg.pins||[]).filter(x=>x.id!==p.id);
     project._sel = null;
@@ -538,7 +553,6 @@ document.addEventListener('DOMContentLoaded', () => {
   on(btnClearPins,'click',()=>{
     if(!currentPage()) return;
     if(!confirm('Clear ALL pins on this page?')) return;
-    commit();
     currentPage().pins = [];
     saveProject(project);
     renderPins(); renderPinsList();
@@ -559,7 +573,7 @@ document.addEventListener('DOMContentLoaded', () => {
   on(inputLevel,'input',()=>{ projectContext.level = inputLevel.value; });
 
   /******************
-   * Measuring (main canvas) — draw preview, then prompt length
+   * Measuring (main canvas) – live preview + prompt
    ******************/
   let measureActive = false;
   let measureDrag = null; // {start:{x,y}, end:{x,y}}
@@ -570,24 +584,20 @@ document.addEventListener('DOMContentLoaded', () => {
   stagePreview.style.display='none';
   measureSvg.appendChild(stagePreview);
 
-  // Toggle measure with Shift key while on stage
-  on(stage,'keydown',(e)=>{
-    if(e.key==='Shift'){ measureActive=true; }
+  on(btnMeasureToggle,'click',()=>{
+    measureActive = !measureActive;
+    btnMeasureToggle.textContent = 'Measure: ' + (measureActive ? 'ON' : 'OFF');
+    if(!measureActive){ stagePreview.style.display='none'; measureDrag=null; }
   });
-  on(stage,'keyup',(e)=>{
-    if(e.key==='Shift'){ measureActive=false; stagePreview.style.display='none'; measureDrag=null; }
-  });
-  // Support clicks without keyboard: double-press M to toggle
-  window.addEventListener('keydown',(e)=>{
-    if(e.key.toLowerCase()==='m'){
-      measureActive = !measureActive;
-      if(!measureActive){ stagePreview.style.display='none'; measureDrag=null; }
-    }
+  on(btnMeasureClear,'click',()=>{
+    const pg = currentPage(); if(!pg) return;
+    pg.measurements = [];
+    saveProject(project);
+    drawMeasurements();
   });
 
   on(stage,'pointerdown',(e)=>{
     if(!measureActive) return;
-    e.preventDefault();
     const r = stageImage.getBoundingClientRect();
     measureDrag = { start:{x:e.clientX-r.left,y:e.clientY-r.top}, end:{x:e.clientX-r.left,y:e.clientY-r.top} };
     stagePreview.setAttribute('x1', measureDrag.start.x);
@@ -596,7 +606,6 @@ document.addEventListener('DOMContentLoaded', () => {
     stagePreview.setAttribute('y2', measureDrag.end.y);
     stagePreview.style.display = 'block';
   });
-
   on(stage,'pointermove',(e)=>{
     if(!measureActive || !measureDrag) return;
     const r = stageImage.getBoundingClientRect();
@@ -604,7 +613,6 @@ document.addEventListener('DOMContentLoaded', () => {
     stagePreview.setAttribute('x2', measureDrag.end.x);
     stagePreview.setAttribute('y2', measureDrag.end.y);
   });
-
   on(stage,'pointerup',()=>{
     if(!measureActive || !measureDrag) return;
     const length = prompt('Enter measured length (ft):','10');
@@ -622,7 +630,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function drawMeasurements(){
     while(measureSvg.firstChild) measureSvg.removeChild(measureSvg.firstChild);
-    measureSvg.appendChild(stagePreview); // keep preview on top of clears
+    measureSvg.appendChild(stagePreview); // keep preview element
     const pg = currentPage(); if(!pg || !pg.measurements) return;
     pg.measurements.forEach(m=>{
       const a = m.points[0], b = m.points[1];
@@ -645,9 +653,9 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   /******************
-   * Photo modal + measurement (drag preview, then prompt)
+   * Photo modal + measurement
    ******************/
-  const photoState = { pin:null, idx:0, measure:false };
+  const photoState = { pin: null, idx: 0, measure: false };
   let photoDrag = null; // {start:{x,y}, end:{x,y}}
   const photoPreview = document.createElementNS('http://www.w3.org/2000/svg','line');
   photoPreview.setAttribute('stroke','#2ecc71');
@@ -666,6 +674,7 @@ document.addEventListener('DOMContentLoaded', () => {
     photoModal.classList.add('show');
   }
   function closePhotoModal(){ photoModal.classList.remove('show'); photoDrag=null; photoPreview.style.display='none'; }
+
   on(btnOpenPhoto,'click',()=> openPhotoModal());
   on(btnPhotoClose,'click',()=> closePhotoModal());
 
@@ -705,7 +714,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if(!photoState.measure){ photoPreview.style.display='none'; photoDrag=null; }
   });
 
-  // Drag on the image to create measurement
   on(photoMeasureSvg,'pointerdown',(e)=>{
     if(!photoState.measure) return;
     const r = photoImg.getBoundingClientRect();
@@ -730,8 +738,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if(length){
       ph.measurements = ph.measurements || [];
       ph.measurements.push({
-        id:id(), kind:'photo',
-        points:[photoDrag.start, photoDrag.end],
+        id: id(),
+        kind: 'photo',
+        points: [photoDrag.start, photoDrag.end],
         feet: parseFloat(length)||0
       });
       saveProject(project);
@@ -771,7 +780,6 @@ document.addEventListener('DOMContentLoaded', () => {
   on(inputPhoto,'change', async (e)=>{
     const p = selectedPin(); if(!p) return alert('Select a pin first.');
     const files = [...e.target.files]; if(!files.length) return;
-    commit();
     for(const f of files){
       const fr = await toDataURL(f);
       p.photos.push({ name:f.name, dataUrl:fr, measurements:[] });
@@ -812,10 +820,9 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   /******************
-   * Keyboard niceties
+   * Keyboard: nudge pin
    ******************/
   window.addEventListener('keydown',(e)=>{
-    // Arrow nudging selected pin
     if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)){
       const p = selectedPin(); if(!p) return;
       e.preventDefault();
@@ -832,13 +839,8 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   /******************
-   * First load
+   * First load – always start on Home
    ******************/
-  // Open last project if available, otherwise stay on Home
-  const last = localStorage.getItem('survey:lastOpenProjectId');
-  if(last && projects.find(p=>p.id===last)){
-    selectProject(last);
-  } else {
-    showScreen('home');
-  }
+  showScreen('home');
+  renderHomeRecent();
 });
