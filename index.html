@@ -5,92 +5,88 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Southwood Signage Survey</title>
 
-  <!-- Look & Feel -->
   <style>
     :root{
-      --bg:#0b1020;           /* background */
-      --panel:#101732;        /* panels */
-      --soft:#121b3a;
+      --bg:#0b1020;
+      --panel:#101732;
+      --soft:#0d1533;
       --text:#e8ecf9;
       --muted:#a5b1d8;
       --line:#24315d;
-      --accent:#2ecc71;       /* Southwood green */
-      --accent-2:#44d983;     /* lighter green */
+      --accent:#2ecc71;   /* Southwood green */
+      --accent-2:#44d983;
+      --blue:#4cc9f0;
       --warn:#f59e0b;
       --err:#ef4444;
-      --blue:#4cc9f0;
     }
     *{box-sizing:border-box}
     html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
     a{color:var(--accent);text-decoration:none}
     a:hover{text-decoration:underline}
-    button{background:#17224a;border:1px solid var(--line);color:var(--text);padding:.6rem .9rem;border-radius:10px;cursor:pointer}
+    button{background:#17224a;border:1px solid var(--line);color:var(--text);padding:.7rem 1rem;border-radius:12px;cursor:pointer}
     button:hover{background:#1d2a5a}
-    .btn-primary{background:linear-gradient(180deg, var(--accent), var(--accent-2)); color:#03210e; border:0;}
+    .btn-primary{background:linear-gradient(180deg, var(--accent), var(--accent-2)); color:#03210e; border:0; font-weight:700}
     .btn-primary:hover{filter:brightness(1.05)}
-    input,select{background:#0f1736;border:1px solid var(--line);color:var(--text);padding:.55rem .65rem;border-radius:10px}
-    .pill{display:inline-flex;align-items:center;gap:.4rem;background:#0e1634;border:1px solid var(--line);padding:.35rem .6rem;border-radius:999px}
+    input,select{background:#0f1736;border:1px solid var(--line);color:var(--text);padding:.6rem .7rem;border-radius:10px}
+    .pill{display:inline-flex;align-items:center;gap:.45rem;background:#0e1634;border:1px solid var(--line);padding:.4rem .7rem;border-radius:999px}
+
     .app{display:grid;grid-template-rows:auto 1fr; height:100%}
-    header.appbar{display:flex;align-items:center;gap:1rem;padding:.7rem 1rem;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#0f1633,#0c132a)}
-    header .brand{display:flex;align-items:center;gap:.7rem;font-weight:700;letter-spacing:.4px}
+    header.appbar{display:flex;align-items:center;gap:1rem;padding:.8rem 1rem;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#0f1633,#0c132a)}
+    header .brand{display:flex;align-items:center;gap:.7rem;font-weight:800;letter-spacing:.3px}
     header .dot{width:14px;height:14px;border-radius:999px;background:var(--accent);box-shadow:0 0 0 3px rgba(46,204,113,.25)}
     header .spacer{flex:1}
     main{height:100%;overflow:auto}
 
-    /* Screens */
-    .screen{display:none;padding:1rem;max-width:1200px;margin:0 auto}
+    .screen{display:none;padding:1.2rem;max-width:1200px;margin:0 auto}
     .screen.show{display:block}
 
     /* Home */
     .hero{display:grid;grid-template-columns:1.2fr .8fr;gap:2rem;align-items:center;margin-top:2rem}
-    .hero h1{margin:.2rem 0 0 0;font-size:2rem}
-    .hero p{color:var(--muted)}
-    .hero .panel{background:var(--panel);border:1px solid var(--line);padding:1rem;border-radius:16px}
-
-    /* Projects */
-    .toolbar{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;margin:.8rem 0}
-    .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:.8rem}
-    .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:.8rem;display:flex;flex-direction:column;gap:.5rem}
-    .card h4{margin:0}
-    .row{display:flex;gap:.5rem;align-items:center}
+    .hero-card{background:var(--panel);border:1px solid var(--line);padding:1.2rem;border-radius:18px}
+    .hero h1{margin:.2rem 0 0;font-size:2.2rem}
     .muted{color:var(--muted)}
 
+    /* Projects */
+    .toolbar{display:flex;flex-wrap:wrap;gap:.6rem;align-items:center;margin:1rem 0}
+    .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:.85rem}
+    .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:.8rem;display:flex;flex-direction:column;gap:.6rem}
+    .card h4{margin:0}
+
     /* Editor */
-    .layout{display:grid;grid-template-columns:230px 1fr 340px;gap:.8rem;min-height:calc(100vh - 64px);padding-bottom:1rem}
+    .layout{display:grid;grid-template-columns:240px 1fr 360px;gap:1rem;min-height:calc(100vh - 70px);padding-bottom:1rem}
     .panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden;display:flex;flex-direction:column;min-height:0}
-    .panel h3{margin:0;padding:.6rem .8rem;border-bottom:1px solid var(--line);background:#11183a;color:#c7d4ff;font-size:.95rem}
-    .thumbs{padding:.6rem;overflow:auto;display:grid;gap:.6rem}
-    .thumb{border:1px solid var(--line);border-radius:12px;background:#0f1733;padding:.4rem;cursor:pointer}
+    .panel h3{margin:0;padding:.7rem .9rem;border-bottom:1px solid var(--line);background:#11183a;color:#c7d4ff;font-size:1rem}
+    .thumbs{padding:.7rem;overflow:auto;display:grid;gap:.7rem}
+    .thumb{border:1px solid var(--line);border-radius:12px;background:#0f1733;padding:.45rem;cursor:pointer}
     .thumb.active{outline:2px solid var(--accent)}
-    .thumb img{width:100%;height:110px;object-fit:cover;border-radius:8px;background:#061023}
+    .thumb img{width:100%;height:120px;object-fit:cover;border-radius:8px;background:#061023}
     .thumb input{width:100%;margin-top:.35rem}
 
-    .stage{position:relative;border:1px dashed #2b3562;border-radius:14px;background:#081229;display:flex;align-items:center;justify-content:center;overflow:auto;min-height:400px}
-    .stage-inner{position:relative;min-width:60%;min-height:60%;display:flex;align-items:center;justify-content:center}
+    .stage{position:relative;border:1px dashed #2b3562;border-radius:14px;background:#081229;display:flex;align-items:center;justify-content:center;overflow:auto;min-height:420px}
+    .stage-inner{position:relative;display:flex;align-items:center;justify-content:center}
     #stageImage{max-width:100%;max-height:100%;display:block}
     #pinLayer{position:absolute;inset:0;pointer-events:none}
-    .pin{position:absolute;transform:translate(-50%,-100%);padding:.22rem .45rem;font-size:.78rem;border-radius:999px;border:1px solid rgba(0,0,0,.35);color:#05121a;font-weight:800;box-shadow:0 3px 10px rgba(0,0,0,.35);pointer-events:auto}
+    .pin{position:absolute;transform:translate(-50%,-100%);padding:.28rem .6rem;font-size:.82rem;border-radius:999px;border:1px solid rgba(0,0,0,.35);color:#031a0c;font-weight:800;box-shadow:0 3px 10px rgba(0,0,0,.35);pointer-events:auto;background:var(--accent)}
     .pin.selected{outline:2px solid #fff}
     .measure{position:absolute;pointer-events:none;inset:0}
-    .help{font-size:.85rem;color:var(--muted)}
     .chips{display:flex;flex-wrap:wrap;gap:.35rem}
     .tag{font-size:.75rem;padding:.18rem .5rem;border-radius:999px;background:#18224a;border:1px solid var(--line)}
+    .help{font-size:.9rem;color:var(--muted)}
+    .spaced{display:flex;gap:.6rem;align-items:center;flex-wrap:wrap}
+    .hidden{display:none}
 
     /* Photo modal */
     .modal{position:fixed;inset:0;background:rgba(0,0,0,.65);display:none;align-items:center;justify-content:center;z-index:50}
     .modal.show{display:flex}
     .modal .box{background:#0f1733;border:1px solid var(--line);border-radius:14px;width:min(1000px,95vw);height:min(85vh,95vh);display:flex;flex-direction:column}
-    .modal header{display:flex;justify-content:space-between;align-items:center;padding:.6rem .9rem;border-bottom:1px solid var(--line)}
+    .modal header{display:flex;justify-content:space-between;align-items:center;padding:.7rem .9rem;border-bottom:1px solid var(--line)}
     .modal main{flex:1;display:grid;grid-template-columns:1fr 300px;min-height:0}
     .viewer{position:relative;background:#060b18;display:flex;align-items:center;justify-content:center;overflow:auto}
     .viewer img{max-width:100%;max-height:100%}
-    .side{border-left:1px solid var(--line);padding:.6rem;overflow:auto}
-
-    .green{color:var(--accent)}
-    .spaced{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap}
+    .side{border-left:1px solid var(--line);padding:.7rem;overflow:auto}
   </style>
 
-  <!-- Optional libs already wired (use if you export/import/etc later) -->
+  <!-- libs (export/pdf ready if needed later) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
@@ -118,20 +114,24 @@
     <main id="screenHome" class="screen show">
       <div class="hero">
         <div>
-          <h1>Welcome 👋</h1>
-          <p>Plan, pin, photo, &amp; measure — all in one tidy place. Click <strong class="green">Projects</strong> to open or create a project, then jump into the <strong class="green">Editor</strong>.</p>
-          <div class="spaced" style="margin:1rem 0 0">
+          <h1>Welcome to Southwood’s Signage Survey</h1>
+          <p class="muted">Plan, pin, photo, &amp; measure — all in one. Start a new project or open an existing one.</p>
+          <div class="spaced" style="margin-top:1rem">
             <button id="homeNew" class="btn-primary">Create New Project</button>
             <button id="homeOpen">Open Projects</button>
           </div>
-        </div>
-        <div class="panel">
-          <h3 style="margin:0 0 .6rem 0;">Quick tips</h3>
-          <div class="help">
-            <div>• Drag pins to move them. Double-click a pin to open its photos.</div>
-            <div>• Measurements show a live preview. Release, then enter your field measurement.</div>
-            <div>• You can add custom sign names — not just the dropdown.</div>
+          <div class="hero-card" style="margin-top:1.2rem">
+            <h3 style="margin:0 0 .4rem 0;">Quick tips</h3>
+            <div class="help">
+              <div>• Drag pins to move them. Double-click a pin to open its photos.</div>
+              <div>• Draw a measurement line (map or photo), then enter your measured length.</div>
+              <div>• Add a custom pin name if it’s not in the dropdown.</div>
+            </div>
           </div>
+        </div>
+        <div class="hero-card">
+          <h3 style="margin:0 0 .6rem 0;">Recent projects</h3>
+          <div id="homeRecent" class="cards"></div>
         </div>
       </div>
     </main>
@@ -155,6 +155,8 @@
           <span class="pill">Level <input id="inputLevel" style="width:80px" placeholder="1"></span>
           <input id="inputUpload" type="file" class="hidden" accept="image/*,application/pdf" multiple />
           <button id="btnUpload" class="btn-primary">Upload Page(s)</button>
+          <button id="btnMeasureToggle">Measure: OFF</button>
+          <button id="btnMeasureClear">Clear Measures</button>
         </div>
       </div>
 
@@ -174,43 +176,71 @@
 
         <div class="panel">
           <h3>Pin Details</h3>
-          <div style="padding:.7rem .8rem;border-bottom:1px solid var(--line)">
-            <div class="row"><div style="width:100px" class="muted">Selected</div><div id="selId" class="muted">None</div></div>
-            <div class="row" style="margin-top:.4rem"><div style="width:100px">Type</div>
-              <select id="fieldType" style="flex:1"></select></div>
-            <div class="row" style="margin-top:.4rem"><div style="width:100px">Custom name</div>
-              <input id="fieldCustom" placeholder="Optional"/></div>
-            <div class="row" style="margin-top:.4rem"><div style="width:100px">Room #</div>
-              <input id="fieldRoomNum"/></div>
-            <div class="row" style="margin-top:.4rem"><div style="width:100px">Room name</div>
-              <input id="fieldRoomName"/></div>
-            <div class="row" style="margin-top:.4rem"><div style="width:100px">Building</div>
-              <input id="fieldBuilding"/></div>
-            <div class="row" style="margin-top:.4rem"><div style="width:100px">Level</div>
-              <input id="fieldLevel"/></div>
-            <div class="row" style="margin-top:.4rem"><div style="width:100px">Notes</div>
-              <input id="fieldNotes"/></div>
-            <div class="row" style="margin-top:.4rem"><div style="width:100px">Position</div>
-              <div id="posLabel" class="muted">—</div></div>
-            <div class="spaced" style="margin-top:.6rem">
-              <button id="btnAddPhoto">Add Photo(s)</button>
-              <button id="btnOpenPhoto">Open Photo Viewer</button>
-              <button id="btnDuplicate">Duplicate Pin</button>
-              <button id="btnDelete">Delete Pin</button>
-              <input type="file" id="inputPhoto" class="hidden" accept="image/*" multiple />
+          <div style="padding:.9rem;border-bottom:1px solid var(--line)">
+            <div class="spaced" style="align-items:flex-start; gap:1rem; flex-wrap:wrap">
+              <div style="min-width:260px">
+                <div class="spaced" style="margin-bottom:.5rem">
+                  <span class="muted" style="min-width:80px">Selected</span>
+                  <span id="selId" class="muted">None</span>
+                </div>
+                <div class="spaced" style="margin-bottom:.5rem">
+                  <span style="min-width:80px">Type</span>
+                  <select id="fieldType" style="flex:1"></select>
+                </div>
+                <div class="spaced" style="margin-bottom:.5rem">
+                  <span style="min-width:80px">Custom</span>
+                  <input id="fieldCustom" placeholder="Optional custom label" style="flex:1"/>
+                </div>
+                <div class="spaced" style="margin-bottom:.5rem">
+                  <span style="min-width:80px">Room #</span>
+                  <input id="fieldRoomNum" style="flex:1"/>
+                </div>
+                <div class="spaced" style="margin-bottom:.5rem">
+                  <span style="min-width:80px">Room</span>
+                  <input id="fieldRoomName" style="flex:1"/>
+                </div>
+                <div class="spaced" style="margin-bottom:.5rem">
+                  <span style="min-width:80px">Building</span>
+                  <input id="fieldBuilding" style="flex:1"/>
+                </div>
+                <div class="spaced" style="margin-bottom:.5rem">
+                  <span style="min-width:80px">Level</span>
+                  <input id="fieldLevel" style="flex:1"/>
+                </div>
+                <div class="spaced" style="margin-bottom:.5rem">
+                  <span style="min-width:80px">Notes</span>
+                  <input id="fieldNotes" style="flex:1"/>
+                </div>
+                <div class="spaced">
+                  <span style="min-width:80px">Position</span>
+                  <span id="posLabel" class="muted">—</span>
+                </div>
+              </div>
+
+              <div style="min-width:260px">
+                <div class="spaced" style="margin-bottom:.5rem">
+                  <button id="btnAddPhoto">Add Photo(s)</button>
+                  <button id="btnOpenPhoto">Open Photo Viewer</button>
+                </div>
+                <div class="spaced">
+                  <button id="btnDuplicate">Duplicate Pin</button>
+                  <button id="btnDelete">Delete Pin</button>
+                </div>
+                <input type="file" id="inputPhoto" class="hidden" accept="image/*" multiple />
+              </div>
             </div>
           </div>
 
           <h3 style="border-top:1px solid var(--line)">Pins</h3>
-          <div style="padding:.6rem .8rem">
-            <div class="spaced" style="margin-bottom:.5rem">
-              <input id="inputSearch" placeholder="Search…" style="flex:1;min-width:140px"/>
+          <div style="padding:.8rem">
+            <div class="spaced" style="margin-bottom:.6rem">
+              <input id="inputSearch" placeholder="Search…" style="flex:1;min-width:160px"/>
               <select id="filterType"><option value="">All Types</option></select>
               <label class="pill"><input type="checkbox" id="toggleField"> Larger pin labels</label>
               <button id="btnAddPin" class="btn-primary">Add Pin</button>
               <button id="btnClearPins">Clear Page Pins</button>
             </div>
-            <div id="pinList" class="cards" style="grid-template-columns:1fr; max-height:300px; overflow:auto"></div>
+            <div id="pinList" class="cards" style="grid-template-columns:1fr; max-height:320px; overflow:auto"></div>
           </div>
         </div>
       </div>
@@ -233,16 +263,16 @@
           <svg id="photoMeasureSvg" class="measure"></svg>
         </div>
         <div class="side">
-          <div class="row"><div style="width:110px" class="muted">Pin</div><div id="photoPinId" class="muted">—</div></div>
-          <div class="row" style="margin-top:.4rem"><div style="width:110px" class="muted">Photo</div><div id="photoName" class="muted">—</div></div>
-          <div class="row" style="margin-top:.4rem"><div style="width:110px" class="muted">Measures</div><div id="photoMeaCount" class="muted">0</div></div>
-          <div class="spaced" style="margin-top:.6rem">
+          <div class="spaced"><span class="muted" style="min-width:100px">Pin</span><span id="photoPinId" class="muted">—</span></div>
+          <div class="spaced" style="margin-top:.35rem"><span class="muted" style="min-width:100px">Photo</span><span id="photoName" class="muted">—</span></div>
+          <div class="spaced" style="margin-top:.35rem"><span class="muted" style="min-width:100px">Measures</span><span id="photoMeaCount" class="muted">0</span></div>
+          <div class="spaced" style="margin-top:.7rem;flex-wrap:wrap">
             <button id="btnPhotoPrev">Prev</button>
             <button id="btnPhotoNext">Next</button>
             <button id="btnPhotoDelete">Delete</button>
             <button id="btnPhotoDownload" class="btn-primary">Download</button>
           </div>
-          <div class="help" style="margin-top:.6rem">Click-drag to draw a line, release, then enter your measured length.</div>
+          <div class="help" style="margin-top:.7rem">Click-drag to draw a line, release, then enter your measured length (ft).</div>
         </div>
       </main>
     </div>
