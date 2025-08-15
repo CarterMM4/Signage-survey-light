@@ -8,7 +8,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function id(){ return Math.random().toString(36).slice(2,10); }
   function clamp(n,min,max){ return Math.max(min, Math.min(max, n)); }
-  function dist(a,b){ const dx=a.x-b.x, dy=a.y-b.y; return Math.sqrt(dx*dx+dy*dy); }
 
   /******************
    * Screens
@@ -45,6 +44,17 @@ document.addEventListener('DOMContentLoaded', () => {
     'Egress':'EGR','Exit':'EXIT','Restroom':'WC','UNIT ID':'UNIT','FOH':'FOH','BOH':'BOH',
     'Stair - Ingress':'ING','Stair - Egress':'EGR'
   };
+
+  // Color rules by name (applies when type is empty)
+  const NAME_COLOR_RULES = [
+    { re:/exit/i, color:'#ef4444' },
+    { re:/ingress|enter|entry/i, color:'#22c55e' },
+    { re:/egress|leave/i, color:'#ef4444' },
+    { re:/elev|lift/i, color:'#8b5cf6' },
+    { re:/restroom|wc|toilet/i, color:'#10b981' },
+    { re:/callbox|intercom/i, color:'#06b6d4' },
+    { re:/evac|stair/i, color:'#84cc16' }
+  ];
 
   let projects = loadProjects();
   let project = null; // current project object
@@ -115,6 +125,16 @@ document.addEventListener('DOMContentLoaded', () => {
   const projSearch = $('projSearch');
   on(projSearch,'input',()=> renderProjectsGrid());
 
+  function duplicateProject(p){
+    const copy = JSON.parse(JSON.stringify(p));
+    copy.id = id();
+    copy.name = p.name + ' (copy)';
+    copy.createdAt = Date.now();
+    copy.updatedAt = Date.now();
+    saveProject(copy);
+    return copy;
+  }
+
   function renderProjectsGrid(){
     const q = (projSearch.value||'').toLowerCase();
     projects = loadProjects();
@@ -133,12 +153,17 @@ document.addEventListener('DOMContentLoaded', () => {
         const row = document.createElement('div'); row.className='spaced';
         const openBtn = document.createElement('button'); openBtn.textContent='Open'; openBtn.className='btn-primary';
         on(openBtn,'click',()=> selectProject(p.id));
+
+        const dupBtn = document.createElement('button'); dupBtn.textContent='Duplicate';
+        on(dupBtn,'click',()=>{ const cp = duplicateProject(p); renderProjectsGrid(); renderHomeRecent(); alert('Duplicated as: ' + cp.name); });
+
         const renameBtn = document.createElement('button'); renameBtn.textContent='Rename';
         on(renameBtn,'click',()=>{
           const name = prompt('Rename project:', p.name);
           if(!name) return;
           p.name = name; saveProject(p); renderProjectsGrid(); renderHomeRecent();
         });
+
         const delBtn = document.createElement('button'); delBtn.textContent='Delete';
         on(delBtn,'click',()=>{
           if(!confirm('Delete this project?')) return;
@@ -146,7 +171,7 @@ document.addEventListener('DOMContentLoaded', () => {
           saveProjectsList();
           renderProjectsGrid(); renderHomeRecent();
         });
-        row.appendChild(openBtn); row.appendChild(renameBtn); row.appendChild(delBtn);
+        row.appendChild(openBtn); row.appendChild(dupBtn); row.appendChild(renameBtn); row.appendChild(delBtn);
         card.appendChild(row);
         projectsGrid.appendChild(card);
       });
@@ -203,6 +228,13 @@ document.addEventListener('DOMContentLoaded', () => {
   // Measure controls
   const btnMeasureToggle = $('btnMeasureToggle');
   const btnMeasureClear = $('btnMeasureClear');
+
+  // Export/Import
+  const btnExportCSV = $('btnExportCSV');
+  const btnExportXLSX = $('btnExportXLSX');
+  const btnExportZIP = $('btnExportZIP');
+  const btnImportCSV = $('btnImportCSV');
+  const inputImportCSV = $('inputImportCSV');
 
   // Photo modal
   const photoModal = $('photoModal');
@@ -370,6 +402,22 @@ document.addEventListener('DOMContentLoaded', () => {
     };
   }
 
+  function colorForPin(p){
+    if(p.sign_type) return SIGN_TYPES[p.sign_type] || '#2ecc71';
+    const name = (p.custom_name || p.room_name || '').trim();
+    for(const r of NAME_COLOR_RULES){
+      if(r.re.test(name)) return r.color;
+    }
+    return '#2ecc71';
+  }
+
+  function labelForPin(p){
+    if(p.custom_name) return p.custom_name;
+    if(p.sign_type) return SHORT[p.sign_type] || p.sign_type.slice(0,4).toUpperCase();
+    if(p.room_number) return p.room_number;
+    return 'PIN';
+  }
+
   function renderPins(){
     pinLayer.innerHTML = '';
     const pg = currentPage(); if(!pg) return;
@@ -385,12 +433,10 @@ document.addEventListener('DOMContentLoaded', () => {
       const el = document.createElement('div');
       el.className = 'pin'+(p.id===project._sel?' selected':'');
       el.dataset.id = p.id;
-      const label = p.custom_name ? p.custom_name
-                  : (SHORT[p.sign_type] || (p.sign_type||'PIN').slice(0,4).toUpperCase());
-      el.textContent = label;
+      el.textContent = labelForPin(p);
       el.style.left = p.x_pct + '%';
       el.style.top = p.y_pct + '%';
-      el.style.background = SIGN_TYPES[p.sign_type] || '#2ecc71';
+      el.style.background = colorForPin(p);
       el.style.padding = fieldMode? '.36rem .68rem' : '.28rem .6rem';
       el.style.fontSize = fieldMode? '0.98rem' : '0.82rem';
 
@@ -422,7 +468,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const card = document.createElement('div'); card.className='card';
       const title = document.createElement('div');
-      title.innerHTML = `<strong>${p.custom_name || p.sign_type || 'Pin'}</strong> <span class="muted">[${p.building||'-'}/${p.level||'-'}]</span>`;
+      title.innerHTML = `<strong>${labelForPin(p)}</strong> <span class="muted">[${p.building||'-'}/${p.level||'-'}]</span>`;
       card.appendChild(title);
 
       const row = document.createElement('div'); row.className='spaced';
@@ -447,7 +493,8 @@ document.addEventListener('DOMContentLoaded', () => {
     fieldBuilding.value = p?.building || '';
     fieldLevel.value = p?.level || '';
     fieldNotes.value = p?.notes || '';
-    posLabel.textContent = p ? `${Number(p.x_pct).toFixed(2)}%, ${Number(p.y_pct).toFixed(2)}%` : '—';
+    const x = Number(p?.x_pct||0).toFixed(2), y=Number(p?.y_pct||0).toFixed(2);
+    posLabel.textContent = p ? `${x}%, ${y}%` : '—';
   }
 
   function selectedPin(){
@@ -596,22 +643,25 @@ document.addEventListener('DOMContentLoaded', () => {
     drawMeasurements();
   });
 
+  function stageLocal(e){
+    const r = stageImage.getBoundingClientRect();
+    return { x: clamp(e.clientX-r.left,0,r.width), y: clamp(e.clientY-r.top,0,r.height) };
+  }
+
   on(stage,'pointerdown',(e)=>{
     if(!measureActive) return;
-    const r = stageImage.getBoundingClientRect();
-    measureDrag = { start:{x:e.clientX-r.left,y:e.clientY-r.top}, end:{x:e.clientX-r.left,y:e.clientY-r.top} };
-    stagePreview.setAttribute('x1', measureDrag.start.x);
-    stagePreview.setAttribute('y1', measureDrag.start.y);
-    stagePreview.setAttribute('x2', measureDrag.end.x);
-    stagePreview.setAttribute('y2', measureDrag.end.y);
+    const s = stageLocal(e);
+    measureDrag = { start:s, end:s };
+    stagePreview.setAttribute('x1', s.x); stagePreview.setAttribute('y1', s.y);
+    stagePreview.setAttribute('x2', s.x); stagePreview.setAttribute('y2', s.y);
     stagePreview.style.display = 'block';
   });
   on(stage,'pointermove',(e)=>{
     if(!measureActive || !measureDrag) return;
-    const r = stageImage.getBoundingClientRect();
-    measureDrag.end = { x:e.clientX-r.left, y:e.clientY-r.top };
-    stagePreview.setAttribute('x2', measureDrag.end.x);
-    stagePreview.setAttribute('y2', measureDrag.end.y);
+    const p = stageLocal(e);
+    measureDrag.end = p;
+    stagePreview.setAttribute('x2', p.x);
+    stagePreview.setAttribute('y2', p.y);
   });
   on(stage,'pointerup',()=>{
     if(!measureActive || !measureDrag) return;
@@ -717,19 +767,19 @@ document.addEventListener('DOMContentLoaded', () => {
   on(photoMeasureSvg,'pointerdown',(e)=>{
     if(!photoState.measure) return;
     const r = photoImg.getBoundingClientRect();
-    photoDrag = { start:{x:e.clientX-r.left,y:e.clientY-r.top}, end:{x:e.clientX-r.left,y:e.clientY-r.top} };
-    photoPreview.setAttribute('x1', photoDrag.start.x);
-    photoPreview.setAttribute('y1', photoDrag.start.y);
-    photoPreview.setAttribute('x2', photoDrag.end.x);
-    photoPreview.setAttribute('y2', photoDrag.end.y);
+    const s = { x: clamp(e.clientX-r.left,0,r.width), y: clamp(e.clientY-r.top,0,r.height) };
+    photoDrag = { start:s, end:s };
+    photoPreview.setAttribute('x1', s.x); photoPreview.setAttribute('y1', s.y);
+    photoPreview.setAttribute('x2', s.x); photoPreview.setAttribute('y2', s.y);
     photoPreview.style.display='block';
   });
   on(photoMeasureSvg,'pointermove',(e)=>{
     if(!photoDrag) return;
     const r = photoImg.getBoundingClientRect();
-    photoDrag.end = { x:e.clientX-r.left, y:e.clientY-r.top };
-    photoPreview.setAttribute('x2', photoDrag.end.x);
-    photoPreview.setAttribute('y2', photoDrag.end.y);
+    const p = { x: clamp(e.clientX-r.left,0,r.width), y: clamp(e.clientY-r.top,0,r.height) };
+    photoDrag.end = p;
+    photoPreview.setAttribute('x2', p.x);
+    photoPreview.setAttribute('y2', p.y);
   });
   on(photoMeasureSvg,'pointerup',()=>{
     if(!photoDrag) return;
@@ -818,6 +868,149 @@ document.addEventListener('DOMContentLoaded', () => {
     a.click();
     setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 700);
   }
+
+  /******************
+   * Export / Import
+   ******************/
+  function toRows(){
+    const rows=[];
+    (project.pages||[]).forEach(pg=>{
+      (pg.pins||[]).forEach(p=>{
+        rows.push({
+          id: p.id,
+          sign_type: p.sign_type || '',
+          custom_name: p.custom_name || '',
+          room_number: p.room_number || '',
+          room_name: p.room_name || '',
+          building: p.building || '',
+          level: p.level || '',
+          x_pct: typeof p.x_pct==='number' ? +p.x_pct.toFixed(3) : '',
+          y_pct: typeof p.y_pct==='number' ? +p.y_pct.toFixed(3) : '',
+          notes: p.notes || '',
+          page_name: pg.name || '',
+          last_edited: new Date(p.lastEdited || project.updatedAt || Date.now()).toISOString()
+        });
+      });
+    });
+    rows.sort((a,b)=>
+      (a.building||'').localeCompare(b.building||'') ||
+      (a.level||'').localeCompare(b.level||'') ||
+      a.room_number.localeCompare(b.room_number, undefined, {numeric:true,sensitivity:'base'})
+    );
+    return rows;
+  }
+
+  function csvEscape(v){ const s=(v==null?'':String(v)); return /["\n,]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s; }
+
+  function exportCSV(){
+    const rows = toRows();
+    const header = Object.keys(rows[0]||{placeholder:''});
+    const csv = [header.join(','), ...rows.map(r=>header.map(h=>csvEscape(r[h])).join(','))].join('\n');
+    downloadFile((project.name||'project').replace(/\W+/g,'_')+'_signage.csv', new Blob([csv], {type:'text/csv'}));
+  }
+
+  function exportXLSX(){
+    const rows = toRows();
+    const wb = XLSX.utils.book_new();
+    const info = [
+      ['Project', project.name],
+      ['Exported', new Date().toLocaleString()],
+      ['Total Signs', rows.length],
+      ['Total Pages', (project.pages||[]).length],
+      []
+    ];
+    const counts={};
+    rows.forEach(r=> counts[r.sign_type]=(counts[r.sign_type]||0)+1 );
+    info.push(['Breakdown']);
+    Object.entries(counts).forEach(([k,v])=> info.push([k,v]));
+    const wsInfo = XLSX.utils.aoa_to_sheet(info);
+    const ws = XLSX.utils.json_to_sheet(rows);
+    XLSX.utils.book_append_sheet(wb, wsInfo, 'Project Info');
+    XLSX.utils.book_append_sheet(wb, ws, 'Signage');
+    const out = XLSX.write(wb, {bookType:'xlsx', type:'array'});
+    downloadFile((project.name||'project').replace(/\W+/g,'_')+'_signage.xlsx',
+      new Blob([out], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+  }
+
+  async function exportZIP(){
+    const rows = toRows();
+    const zip = new JSZip();
+    // CSV
+    const header = Object.keys(rows[0]||{placeholder:''});
+    const csv = [header.join(','), ...rows.map(r=>header.map(h=>csvEscape(r[h])).join(','))].join('\n');
+    zip.file('signage.csv', csv);
+    // Photos
+    (project.pages||[]).forEach(pg=>{
+      (pg.pins||[]).forEach(pin=>{
+        (pin.photos||[]).forEach((ph,idx)=>{
+          const folder = zip.folder(`photos/${pin.id}`);
+          const base = ph.name || `photo_${idx+1}.png`;
+          const bin = dataURLtoArrayBuffer(ph.dataUrl);
+          folder.file(base, bin);
+        });
+      });
+    });
+    const blob = await zip.generateAsync({type:'blob'});
+    downloadFile((project.name||'project').replace(/\W+/g,'_')+'_export.zip', blob);
+  }
+
+  function dataURLtoArrayBuffer(dataURL){
+    const bstr = atob((dataURL||'').split(',')[1]||'');
+    const len=bstr.length; const buf=new Uint8Array(len);
+    for(let i=0;i<len;i++) buf[i]=bstr.charCodeAt(i);
+    return buf;
+  }
+
+  function importCSVText(text){
+    const lines = text.split(/\r?\n/).filter(Boolean);
+    if(lines.length<2) return;
+    const hdr = lines[0].split(',').map(h=>h.trim());
+    const idx = (k)=> hdr.indexOf(k);
+    const pg = currentPage(); if(!pg) return;
+    for(let i=1;i<lines.length;i++){
+      const cells = parseCsvLine(lines[i]);
+      const get = (k)=> cells[idx(k)] ?? '';
+      const p = makePin(parseFloat(get('x_pct'))||50, parseFloat(get('y_pct'))||50);
+      p.sign_type = get('sign_type')||'';
+      p.custom_name = get('custom_name')||'';
+      p.room_number = get('room_number')||'';
+      p.room_name = get('room_name')||'';
+      p.building = get('building')||'';
+      p.level = get('level')||'';
+      p.notes = get('notes')||'';
+      pg.pins.push(p);
+    }
+    saveProject(project);
+    renderPins(); renderPinsList();
+    alert('CSV imported into current page.');
+  }
+
+  function parseCsvLine(line){
+    const out=[]; let cur=''; let i=0; let inQ=false;
+    while(i<line.length){
+      const ch=line[i++];
+      if(inQ){
+        if(ch==='"'){ if(line[i]==='"'){ cur+='"'; i++; } else { inQ=false; } }
+        else cur+=ch;
+      }else{
+        if(ch===','){ out.push(cur); cur=''; }
+        else if(ch==='"'){ inQ=true; }
+        else cur+=ch;
+      }
+    }
+    out.push(cur); return out;
+  }
+
+  on(btnExportCSV,'click',exportCSV);
+  on(btnExportXLSX,'click',exportXLSX);
+  on(btnExportZIP,'click',exportZIP);
+  on(btnImportCSV,'click',()=> inputImportCSV.click());
+  on(inputImportCSV,'change', async (e)=>{
+    const f=e.target.files?.[0]; if(!f) return;
+    const text = await f.text();
+    importCSVText(text);
+    inputImportCSV.value='';
+  });
 
   /******************
    * Keyboard: nudge pin
