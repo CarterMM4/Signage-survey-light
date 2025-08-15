@@ -10,38 +10,44 @@ document.addEventListener('DOMContentLoaded', () => {
     'FOH':'#0ea5e9','BOH':'#64748b','Elevator':'#8b5cf6','UNIT ID':'#22c55e',
     'Stair - Ingress':'#22c55e','Stair - Egress':'#ef4444','Ingress':'#22c55e',
     'Egress':'#ef4444','Hall Direct':'#f59e0b','Callbox':'#06b6d4','Evac':'#84cc16',
-    'Exit':'#ef4444','Restroom':'#10b981'
+    'Exit':'#ef4444','Restroom':'#10b981','Custom':'#22c55e'
   };
   const SHORT = {
     'Elevator':'ELV','Hall Direct':'HD','Callbox':'CB','Evac':'EV','Ingress':'ING',
     'Egress':'EGR','Exit':'EXIT','Restroom':'WC','UNIT ID':'UNIT','FOH':'FOH','BOH':'BOH',
-    'Stair - Ingress':'ING','Stair - Egress':'EGR'
+    'Stair - Ingress':'ING','Stair - Egress':'EGR','Custom':'CSTM'
   };
 
-  /***********************
-   * Grab DOM references *
-   ***********************/
-  // Left column
+  /* Views */
+  const viewHome = $('viewHome');
+  const viewEditor = $('viewEditor');
+
+  /* HOME refs */
+  const homeGrid = $('homeGrid');
+  const homeSearch = $('homeSearch');
+  const btnNewProject = $('btnNewProject');
+
+  /* Editor – left */
   const thumbsEl = $('thumbs');
 
-  // Stage
+  /* Editor – stage */
   const stage = $('stage');
   const stageImage = $('stageImage');
   const pinLayer = $('pinLayer');
   const measureSvg = $('measureSvg');
 
-  // Toolbar bits
+  /* Editor – toolbar */
   const projectLabel = $('projectLabel');
   const inputUpload = $('inputUpload');
   const inputBuilding = $('inputBuilding');
   const inputLevel = $('inputLevel');
   const inputSearch = $('inputSearch');
   const filterType = $('filterType');
-  const toggleStrict = $('toggleStrict');
   const toggleField = $('toggleField');
 
-  // Right panel — fields
+  /* Editor – right panel */
   const fieldType = $('fieldType');
+  const fieldLabel = $('fieldLabel');
   const fieldRoomNum = $('fieldRoomNum');
   const fieldRoomName = $('fieldRoomName');
   const fieldBuilding = $('fieldBuilding');
@@ -49,69 +55,69 @@ document.addEventListener('DOMContentLoaded', () => {
   const fieldNotes = $('fieldNotes');
   const selId = $('selId');
   const posLabel = $('posLabel');
-  const gpsLabel = $('gpsLabel'); // kept label in UI; we won’t fill it (GPS removed)
   const warnsEl = $('warns');
   const pinList = $('pinList');
 
-  // Photo modal
+  /* Photo modal */
   const photoModal = $('photoModal');
   const photoImg = $('photoImg');
   const photoMeasureSvg = $('photoMeasureSvg');
+  const photoOverlay = $('photoOverlay');
   const photoPinId = $('photoPinId');
   const photoName = $('photoName');
   const photoMeaCount = $('photoMeaCount');
+  const photoThumbRow = $('photoThumbRow');
 
   /************************
-   * App state / Undo/redo *
+   * App state & Undo/redo
    ************************/
   let projects = [];
-  let currentProjectId = null;
   let project = null;
 
   const UNDO = [];
   const REDO = [];
   const MAX_UNDO = 50;
 
-  // Ephemeral context (for default building/level when adding)
+  // Ephemeral context (defaults while adding)
   const projectContext = { building:'', level:'' };
 
   // Stage interaction state
   let addingPin = false;
-  let draggingEl = null;         // DOM element while dragging
-  let draggingStart = null;      // {x_pct,y_pct}
+  let draggingEl = null;
+  let draggingPin = null;
   let measureMode = false;
   let calibFirst = null;
   let measureFirst = null;
   let fieldMode = false;
-  let calibAwait = null; // 'main' | 'photo'
+  let calibAwait = null; // 'main'
 
   // Photo modal state
-  const photoState = { pin:null, idx:0, measure:false, calib:null };
-  let photoMeasureFirst = null;          // first point while drawing a line
-  let photoPreview = null;               // {a:{x,y}, b:{x,y}} live preview
+  const photoState = { pin:null, idx:0, measuring:false, start:null }; // measuring for rubber-band
 
   /*******************
    * Small utilities *
    *******************/
   function id(){ return Math.random().toString(36).slice(2,10); }
-  function fix(n){ return typeof n==='number'? +Number(n||0).toFixed(3):''; }
+  function fix(n){ return (typeof n==='number') ? +Number(n||0).toFixed(3) : ''; }
   function pctLabel(x,y){ return `${(x||0).toFixed(2)}%, ${(y||0).toFixed(2)}%`; }
   function dist(a,b){ const dx=a.x-b.x, dy=a.y-b.y; return Math.sqrt(dx*dx+dy*dy); }
 
-  function toPctCoords(e){
+  function toPctCoords(clientX, clientY){
     const rect=stageImage.getBoundingClientRect();
-    const x=Math.min(Math.max(0,e.clientX-rect.left),rect.width);
-    const y=Math.min(Math.max(0,e.clientY-rect.top),rect.height);
+    const x=Math.min(Math.max(0,clientX-rect.left),rect.width);
+    const y=Math.min(Math.max(0,clientY-rect.top),rect.height);
     return { x_pct: +(x/rect.width*100).toFixed(3), y_pct:+(y/rect.height*100).toFixed(3) };
   }
-  function toLocalOnStage(e){
-    const r=stageImage.getBoundingClientRect(); return { x:e.clientX-r.left, y:e.clientY-r.top };
+  function toLocal(clientX, clientY){
+    const r=stageImage.getBoundingClientRect();
+    return { x: clientX - r.left, y: clientY - r.top };
   }
-  function toScreenOnStage(pt){
-    const r=stageImage.getBoundingClientRect(); return { x:r.left+pt.x, y:r.top+pt.y };
+  function toScreen(pt){
+    const r=stageImage.getBoundingClientRect();
+    return { x: r.left + pt.x, y: r.top + pt.y };
   }
 
-  function csvEscape(v){ const s=(v==null? '': String(v)); if(/["\n,]/.test(s)) return '"'+s.replace(/"/g,'""')+'"'; return s; }
+  function csvEscape(v){ const s=(v==null? '': String(v)); return (/["\n,]/.test(s)) ? '"'+s.replace(/"/g,'""')+'"' : s; }
   function parseCsvLine(line){
     const out=[]; let cur=''; let i=0; let inQ=false;
     while(i<line.length){
@@ -144,9 +150,10 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   function downloadText(name, text){ downloadFile(name, new Blob([text],{type:'text/plain'})); }
   function downloadFile(name, blob){
-    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name;
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob); a.download=name;
     document.body.appendChild(a); a.click();
-    setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 600);
   }
 
   /*********************
@@ -154,43 +161,47 @@ document.addEventListener('DOMContentLoaded', () => {
    *********************/
   function newProject(name){
     return {
-      id:id(),
-      name:name || 'Untitled Project',
-      createdAt:Date.now(),
-      updatedAt:Date.now(),
-      pages:[],
-      settings:{ colorsByType:SIGN_TYPES, fieldMode:false, strictRules:false }
+      id:id(), name, createdAt:Date.now(), updatedAt:Date.now(),
+      pages:[], settings:{ colorsByType:SIGN_TYPES, fieldMode:false }
     };
   }
   function currentPage(){
+    if(!project) return null;
     if(!project._pageId && project.pages[0]) project._pageId=project.pages[0].id;
-    return project.pages.find(p=>p.id===project._pageId);
+    return project.pages.find(p=>p.id===project._pageId) || null;
   }
-  function makePin(x_pct,y_pct){
+  function makePin(x_pct, y_pct){
     return {
       id:id(),
       sign_type:'',
-      custom_label:'',         // allow user-named label
+      label:'',            // custom display label
       room_number:'',
       room_name:'',
-      building: inputBuilding?.value || projectContext.building || '',
-      level: inputLevel?.value || projectContext.level || '',
+      building: inputBuilding.value || projectContext.building || '',
+      level: inputLevel.value || projectContext.level || '',
       x_pct, y_pct,
       notes:'',
-      photos:[],               // [{name,dataUrl,measurements:[{id,points:[{x,y},{x,y}], label:string}], ...}]
+      photos:[],           // [{name,dataUrl,measurements:[], scalePxPerFt?}]
       lastEdited:Date.now()
     };
   }
   function findPin(idv){
-    for(const pg of project.pages){ const f=(pg.pins||[]).find(p=>p.id===idv); if(f) return f; }
+    for(const pg of project.pages){
+      const f=(pg.pins||[]).find(p=>p.id===idv);
+      if(f) return f;
+    }
     return null;
   }
-  function checkedPinIds(){ return [...pinList.querySelectorAll('input[type="checkbox"]:checked')].map(cb=>cb.dataset.id); }
+  function checkedPinIds(){
+    return [...pinList.querySelectorAll('input[type="checkbox"]:checked')].map(cb=>cb.dataset.id);
+  }
 
-  function selectProject(pid){
-    project = projects.find(p=>p.id===pid);
-    if(!project) return;
+  function selectProjectById(pid){
+    const p = projects.find(x=>x.id===pid);
+    if(!p) return;
+    project = p;
     localStorage.setItem('survey:lastOpenProjectId', pid);
+    switchView('editor');
     renderAll();
   }
   function saveProject(p){
@@ -205,19 +216,12 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function addImagePage(url, name){
-    const pg = {
-      id:id(),
-      name: name || 'Image',
-      kind:'image',
-      blobUrl:url,
-      pins:[],
-      measurements:[],
-      updatedAt:Date.now()
-    };
+    const pg={ id:id(), name:name||'Image', kind:'image', blobUrl:url, pins:[], measurements:[], updatedAt:Date.now() };
     project.pages.push(pg);
     if(!project._pageId) project._pageId=pg.id;
-    saveProject(project);
+    saveProject(project); renderAll();
   }
+
   async function addPdfPages(file){
     const url=URL.createObjectURL(file);
     const pdf=await pdfjsLib.getDocument(url).promise;
@@ -229,24 +233,96 @@ document.addEventListener('DOMContentLoaded', () => {
       const ctx=canvas.getContext('2d');
       await page.render({canvasContext:ctx, viewport}).promise;
       const data=canvas.toDataURL('image/png');
-      const pg = {
-        id:id(),
-        name:`${file.name.replace(/\.[^.]+$/,'')} · p${i}`,
-        kind:'pdf',
-        pdfPage:i,
-        blobUrl:data,
-        pins:[],
-        measurements:[],
-        updatedAt:Date.now()
-      };
+      const pg={ id:id(), name:`${file.name.replace(/\.[^.]+$/,'')} · p${i}`, kind:'pdf', pdfPage:i, blobUrl=data, pins:[], measurements:[], updatedAt:Date.now() };
       project.pages.push(pg);
     }
     if(!project._pageId && project.pages[0]) project._pageId=project.pages[0].id;
-    saveProject(project);
+    saveProject(project); renderAll();
+  }
+
+  /***************
+   * View switch *
+   ***************/
+  function switchView(which){
+    if(which==='home'){
+      viewHome.classList.add('active'); viewEditor.classList.remove('active');
+      renderHome();
+    }else{
+      viewEditor.classList.add('active'); viewHome.classList.remove('active');
+    }
   }
 
   /****************
-   * Render funcs *
+   * Home (hub)   *
+   ****************/
+  function renderHome(){
+    const q=(homeSearch.value||'').toLowerCase();
+    homeGrid.innerHTML='';
+    const list = projects
+      .slice()
+      .sort((a,b)=> (b.updatedAt||0)-(a.updatedAt||0))
+      .filter(p=> !q || p.name.toLowerCase().includes(q));
+    if(!list.length){
+      homeGrid.innerHTML = `<div class="muted">No projects yet. Click <strong>New Project</strong> to start.</div>`;
+      return;
+    }
+    list.forEach(p=>{
+      const totalPins = p.pages.reduce((a,pg)=>a+(pg.pins?.length||0),0);
+      const card = document.createElement('div');
+      card.className='card';
+      card.innerHTML = `
+        <header>
+          <strong>${csvEscape(p.name)}</strong>
+          <button class="btn acc open">Open</button>
+        </header>
+        <main>
+          <div class="muted">Pages: ${p.pages.length} • Pins: ${totalPins}</div>
+          <div class="muted">Updated: ${new Date(p.updatedAt).toLocaleString()}</div>
+          <div class="muted">ID: ${p.id}</div>
+        </main>
+        <footer>
+          <button class="btn rename">Rename</button>
+          <button class="btn">Duplicate</button>
+          <button class="btn ghost delete">Delete</button>
+        </footer>
+      `;
+      card.querySelector('.open').onclick = ()=> selectProjectById(p.id);
+      card.querySelector('.rename').onclick = ()=>{
+        const name = prompt('New name:', p.name);
+        if(!name) return;
+        p.name=name; saveProject(p); renderHome();
+      };
+      card.querySelector('.delete').onclick = ()=>{
+        if(!confirm('Delete this project?')) return;
+        projects = projects.filter(x=>x.id!==p.id);
+        localStorage.setItem('survey:projects', JSON.stringify(projects));
+        renderHome();
+      };
+      card.querySelector('footer .btn:nth-child(2)').onclick = ()=>{
+        const copy = JSON.parse(JSON.stringify(p));
+        copy.id = id(); copy.name = p.name + ' (copy)';
+        copy.createdAt = Date.now(); copy.updatedAt=Date.now();
+        projects.push(copy);
+        localStorage.setItem('survey:projects', JSON.stringify(projects));
+        renderHome();
+      };
+      homeGrid.appendChild(card);
+    });
+  }
+
+  on(btnNewProject,'click',()=>{
+    const name = prompt('Project name','New Project');
+    if(!name) return;
+    const p = newProject(name);
+    projects.push(p);
+    localStorage.setItem('survey:projects', JSON.stringify(projects));
+    selectProjectById(p.id);
+  });
+
+  on(homeSearch,'input',()=> renderHome());
+
+  /****************
+   * Rendering    *
    ****************/
   function renderAll(){
     renderTypeOptionsOnce();
@@ -256,8 +332,7 @@ document.addEventListener('DOMContentLoaded', () => {
     renderPinsList();
     renderProjectLabel();
     drawMeasurements();
-    if(toggleStrict) toggleStrict.checked=!!project.settings.strictRules;
-    if(toggleField) toggleField.checked=!!project.settings.fieldMode;
+    toggleField.checked = !!project.settings.fieldMode;
   }
 
   let _typesFilled = false;
@@ -268,18 +343,18 @@ document.addEventListener('DOMContentLoaded', () => {
       filterType.appendChild(o.cloneNode(true));
       fieldType.appendChild(o);
     });
-    // Also allow free text type by enabling typing into fieldType (contenteditable alternative)
-    // We’ll handle custom label separately in the details UI (see updatePinDetails notes).
     _typesFilled = true;
   }
 
   function renderProjectLabel(){
-    const totalPins = project.pages.reduce((a,p)=>a+(p.pins?.length||0),0);
-    projectLabel.textContent = `Project: ${project.name} • Pages: ${project.pages.length} • Pins: ${totalPins}`;
+    if(!project){ projectLabel.textContent='—'; return; }
+    const pins = project.pages.reduce((a,p)=>a+(p.pins?.length||0),0);
+    projectLabel.textContent = `Project: ${project.name} • Pages: ${project.pages.length} • Pins: ${pins}`;
   }
 
   function renderThumbs(){
     thumbsEl.innerHTML='';
+    if(!project) return;
     project.pages.forEach((pg)=>{
       const d=document.createElement('div'); d.className='thumb'+(project._pageId===pg.id?' active':'');
       const im=document.createElement('img'); im.src=pg.blobUrl; d.appendChild(im);
@@ -297,75 +372,40 @@ document.addEventListener('DOMContentLoaded', () => {
     stageImage.src=pg.blobUrl;
   }
 
-  function displayTextForPin(p){
-    // Prefer custom label if provided; else SHORT[type] or fallback to first 3 chars
-    if(p.custom_label && p.custom_label.trim()) return p.custom_label.trim();
-    const base = p.sign_type || '';
-    return SHORT[base] || base.slice(0,3).toUpperCase() || 'PIN';
-  }
-
   function renderPins(){
     pinLayer.innerHTML='';
     const pg=currentPage(); if(!pg) return;
-    fieldMode=!!project.settings.fieldMode;
+    fieldMode = !!project.settings.fieldMode;
     const q=(inputSearch.value||'').toLowerCase();
     const typeFilter=filterType.value;
 
     (pg.pins||[]).forEach(p=>{
       if(typeFilter && p.sign_type!==typeFilter) return;
-      const line=[p.custom_label,p.sign_type,p.room_number,p.room_name,p.building,p.level,p.notes].join(' ').toLowerCase();
+      const line=[p.sign_type,p.label,p.room_number,p.room_name,p.building,p.level,p.notes].join(' ').toLowerCase();
       if(q && !line.includes(q)) return;
 
       const el=document.createElement('div');
       el.className='pin'+(p.id===project._sel?' selected':'');
       el.dataset.id=p.id;
-      el.textContent=displayTextForPin(p);
+      const tag = (p.label && p.label.trim()) ? p.label.trim() : (SHORT[p.sign_type] || (p.sign_type||'-').slice(0,3).toUpperCase());
+      el.textContent = tag;
       el.style.left=p.x_pct+'%';
       el.style.top=p.y_pct+'%';
-      el.style.background=SIGN_TYPES[p.sign_type]||'#a3e635';
-      el.style.padding = fieldMode? '.28rem .5rem' : '.18rem .35rem';
-      el.style.fontSize= fieldMode? '0.9rem' : '0.75rem';
-      el.style.userSelect='none';
-      el.style.touchAction='none'; // better pointer dragging
+      el.style.background=SIGN_TYPES[p.sign_type]||'#22c55e';
+      el.style.padding = fieldMode? '.32rem .55rem' : '.22rem .45rem';
+      el.style.fontSize= fieldMode? '0.95rem' : '0.8rem';
       pinLayer.appendChild(el);
 
-      // Start drag on pointerdown
-      el.addEventListener('pointerdown',(ev)=>{
-        ev.preventDefault();
-        selectPin(p.id);
+      // Start drag
+      el.addEventListener('pointerdown',(e)=>{
         draggingEl = el;
-        draggingStart = { x_pct:p.x_pct, y_pct:p.y_pct };
-        el.setPointerCapture?.(ev.pointerId);
+        draggingPin = p;
+        el.setPointerCapture?.(e.pointerId);
       });
-
-      // Quick open photo modal on dblclick
-      el.addEventListener('dblclick',()=>{ selectPin(p.id); openPhotoModal(); });
     });
 
     updatePinDetails();
   }
-
-  // Global pointer move/up for dragging pins
-  on(document,'pointermove',(e)=>{
-    if(!draggingEl) return;
-    const pin = findPin(draggingEl.dataset.id); if(!pin) return;
-    const {x_pct,y_pct}=toPctCoords(e);
-    draggingEl.style.left = x_pct+'%';
-    draggingEl.style.top = y_pct+'%';
-    posLabel.textContent = pctLabel(x_pct,y_pct);
-  });
-  on(document,'pointerup',(e)=>{
-    if(!draggingEl) return;
-    const pin = findPin(draggingEl.dataset.id);
-    if(pin){
-      commit();
-      const {x_pct,y_pct}=toPctCoords(e);
-      pin.x_pct=x_pct; pin.y_pct=y_pct; pin.lastEdited=Date.now();
-      saveProject(project); renderPinsList();
-    }
-    draggingEl.releasePointerCapture?.(e.pointerId);
-    draggingEl=null; draggingStart=null;
-  });
 
   function renderPinsList(){
     pinList.innerHTML='';
@@ -374,55 +414,41 @@ document.addEventListener('DOMContentLoaded', () => {
     const typeFilter=filterType.value;
 
     (pg.pins||[]).forEach(p=>{
-      const line=[p.custom_label,p.sign_type,p.room_number,p.room_name,p.building,p.level,p.notes].join(' ').toLowerCase();
+      const line=[p.sign_type,p.label,p.room_number,p.room_name,p.building,p.level,p.notes].join(' ').toLowerCase();
       if(q && !line.includes(q)) return;
       if(typeFilter && p.sign_type!==typeFilter) return;
 
       const row=document.createElement('div'); row.className='item';
+      row.style.display='grid';
+      row.style.gridTemplateColumns='20px 1fr auto';
+      row.style.alignItems='center';
+      row.style.gap='.5rem';
+      row.style.padding='.35rem .45rem';
+      row.style.border='1px solid #1e2a2d';
+      row.style.borderRadius='10px';
+      row.style.background='#0f1b1e';
+
       const cb=document.createElement('input'); cb.type='checkbox'; cb.dataset.id=p.id; row.appendChild(cb);
       const txt=document.createElement('div');
-      const labelShown = p.custom_label ? `(${p.custom_label})` : '';
-      txt.innerHTML=`<strong>${p.sign_type||'-'}</strong> ${labelShown} • ${p.room_number||'-'} ${p.room_name||''} <span class="muted">[${p.building||'-'}/${p.level||'-'}]</span>`;
+      const tag = (p.label && p.label.trim()) ? p.label.trim() : (p.sign_type||'-');
+      txt.innerHTML=`<strong>${tag}</strong> • ${p.room_number||'-'} ${p.room_name||''} <span class="muted">[${p.building||'-'}/${p.level||'-'}]</span>`;
       row.appendChild(txt);
-      const go=document.createElement('button'); go.textContent='Go'; go.onclick=()=>{ selectPin(p.id); }; row.appendChild(go);
+      const go=document.createElement('button'); go.className='btn'; go.textContent='Go'; go.onclick=()=>{ selectPin(p.id); }; row.appendChild(go);
       pinList.appendChild(row);
     });
   }
 
-  function selectedPin(){
-    const idv=project._sel;
-    if(!idv) return null;
-    return findPin(idv);
-  }
-
-  function selectPin(idv){
-    project._sel=idv; saveProject(project); renderPins();
-    const el=[...pinLayer.children].find(x=>x.dataset.id===idv);
-    if(el){ el.scrollIntoView({block:'center', inline:'center', behavior:'smooth'}); }
-    const p=findPin(idv);
-    if(p){
-      const pgId=project.pages.find(pg=>pg.pins.includes(p))?.id;
-      if(pgId && project._pageId!==pgId){ project._pageId=pgId; saveProject(project); renderStage(); renderPins(); drawMeasurements(); }
-    }
-  }
-
   function updatePinDetails(){
-    const p=selectedPin();
-    selId.textContent=p? p.id : 'None';
-    if(!p){
-      fieldType.value=''; fieldRoomNum.value=''; fieldRoomName.value=''; fieldBuilding.value=''; fieldLevel.value=''; fieldNotes.value='';
-      posLabel.textContent='—'; gpsLabel.textContent='—';
-      renderWarnings();
-      return;
-    }
-    fieldType.value=p.sign_type||'';
-    fieldRoomNum.value=p.room_number||'';
-    fieldRoomName.value=p.room_name||'';
-    fieldBuilding.value=p.building||'';
-    fieldLevel.value=p.level||'';
-    fieldNotes.value=p.notes||'';
-    posLabel.textContent=pctLabel(p.x_pct,p.y_pct);
-    gpsLabel.textContent='—'; // GPS removed
+    const p = selectedPin();
+    selId.textContent = p ? p.id : 'None';
+    fieldType.value = p?.sign_type || '';
+    fieldLabel.value = p?.label || '';
+    fieldRoomNum.value = p?.room_number || '';
+    fieldRoomName.value = p?.room_name || '';
+    fieldBuilding.value = p?.building || '';
+    fieldLevel.value = p?.level || '';
+    fieldNotes.value = p?.notes || '';
+    posLabel.textContent = p ? pctLabel(p.x_pct,p.y_pct) : '—';
     renderWarnings();
   }
 
@@ -437,7 +463,28 @@ document.addEventListener('DOMContentLoaded', () => {
     if((/ELECTRICAL|DATA/).test(rn) && p.sign_type!=='BOH'){
       list.push('Recommended BOH for ELECTRICAL/DATA rooms.');
     }
-    list.forEach(s=>{ const t=document.createElement('span'); t.className='tag warn'; t.textContent=s; warnsEl.appendChild(t); });
+    list.forEach(s=>{
+      const t=document.createElement('div');
+      t.className='muted'; t.textContent='• '+s;
+      warnsEl.appendChild(t);
+    });
+  }
+
+  function selectedPin(){
+    const idv=project? project._sel : null;
+    if(!idv) return null;
+    return findPin(idv);
+  }
+
+  function selectPin(idv){
+    project._sel=idv; saveProject(project); renderPins();
+    const el=[...pinLayer.children].find(x=>x.dataset.id===idv);
+    if(el){ el.scrollIntoView({block:'center', inline:'center', behavior:'smooth'}); }
+    const p=findPin(idv);
+    if(p){
+      const pgId=project.pages.find(pg=> (pg.pins||[]).includes(p))?.id;
+      if(pgId && project._pageId!==pgId){ project._pageId=pgId; saveProject(project); renderStage(); renderPins(); drawMeasurements(); }
+    }
   }
 
   /***********************
@@ -445,187 +492,185 @@ document.addEventListener('DOMContentLoaded', () => {
    ***********************/
   function startCalibration(scope){
     calibFirst=null; measureFirst=null;
-    alert('Calibration: click two points on the page to set real feet.');
-    measureMode=false; const btn=$('btnMeasureToggle'); if(btn) btn.textContent='Measuring: OFF';
+    alert('Calibration: click two points on the stage to define real feet.');
+    measureMode=false; $('btnMeasureToggle').textContent='Measuring: OFF';
     calibAwait=scope;
   }
   function toggleMeasuring(scope){
     measureMode=!measureMode;
-    if(scope==='main'){ const btn=$('btnMeasureToggle'); if(btn) btn.textContent = 'Measuring: '+(measureMode?'ON':'OFF'); }
+    if(scope==='main') $('btnMeasureToggle').textContent = 'Measuring: '+(measureMode?'ON':'OFF');
   }
   function resetMeasurements(scope){
     if(scope==='main'){
       const pg=currentPage(); if(!pg) return;
-      pg.measurements=[];
-      drawMeasurements();
-      saveProject(project);
-    }else{
-      const ph=getCurrentPhoto(); if(ph){ ph.measurements=[]; drawPhotoMeasurements(); saveProject(project); }
+      pg.measurements=[]; drawMeasurements(); saveProject(project);
     }
   }
-
-  on(stage,'click',(e)=>{
-    const page=currentPage(); if(!page) return;
-    const pt=toLocalOnStage(e);
-    if(calibAwait==='main'){
-      if(!calibFirst) { calibFirst=pt; return; }
-      const px = dist(calibFirst, pt);
-      const ft = parseFloat(prompt('Enter real distance (feet):','10')) || 10;
-      page.scalePxPerFt = px/ft; calibFirst=null; calibAwait=null;
-      alert('Calibrated: '+(px/ft).toFixed(2)+' px/ft');
-      return;
-    }
-    if(measureMode){
-      if(!measureFirst){ measureFirst=pt; return; }
-      const m={id:id(), kind:'main', points:[measureFirst, pt]};
-      if(page.scalePxPerFt){ m.feet = (dist(measureFirst, pt)/page.scalePxPerFt); }
-      page.measurements = page.measurements||[]; page.measurements.push(m); measureFirst=null; drawMeasurements(); saveProject(project);
-    }
-  });
 
   function drawMeasurements(){
     const page=currentPage();
     while(measureSvg.firstChild) measureSvg.removeChild(measureSvg.firstChild);
     if(!page||!page.measurements) return;
     page.measurements.forEach(m=>{
-      const a=toScreenOnStage(m.points[0]); const b=toScreenOnStage(m.points[1]);
+      const a=toScreen(m.points[0]); const b=toScreen(m.points[1]);
       const dx=Math.abs(a.x-b.x), dy=Math.abs(a.y-b.y);
-      const color = (dx>dy)? '#ef4444' : (dy>dx)? '#3b82f6' : '#f59e0b';
+      const color=(dx>dy)? '#ef4444' : (dy>dx)? '#3b82f6' : '#f59e0b';
       const line=document.createElementNS('http://www.w3.org/2000/svg','line');
-      line.setAttribute('x1',a.x); line.setAttribute('y1',a.y); line.setAttribute('x2',b.x); line.setAttribute('y2',b.y); line.setAttribute('stroke',color);
+      line.setAttribute('x1',a.x); line.setAttribute('y1',a.y);
+      line.setAttribute('x2',b.x); line.setAttribute('y2',b.y);
+      line.setAttribute('stroke',color); line.setAttribute('stroke-width','3');
       measureSvg.appendChild(line);
-      const midx=(a.x+b.x)/2; const midy=(a.y+b.y)/2;
+
+      const midx=(a.x+b.x)/2, midy=(a.y+b.y)/2;
       const text=document.createElementNS('http://www.w3.org/2000/svg','text');
-      const ft = m.feet ? m.feet.toFixed(2)+' ft' :
-        ((currentPage().scalePxPerFt)? (dist(m.points[0],m.points[1])/currentPage().scalePxPerFt).toFixed(2)+' ft' :
-         (dist(m.points[0],m.points[1]).toFixed(0)+' px'));
-      text.setAttribute('x',midx); text.setAttribute('y',midy-6); text.textContent=ft;
-      measureSvg.appendChild(text);
+      const ft = m.feet ? m.feet.toFixed(2)+' ft' : (dist(a,b).toFixed(0)+' px');
+      text.setAttribute('x',midx); text.setAttribute('y',midy-6); text.textContent=ft; measureSvg.appendChild(text);
     });
   }
+
+  /* Stage clicks for measure & add pin */
+  on(stage,'click',(e)=>{
+    const pg=currentPage(); if(!pg) return;
+    const pt=toLocal(e.clientX, e.clientY);
+    if(calibAwait==='main'){
+      if(!calibFirst){ calibFirst=pt; return; }
+      const px = dist(calibFirst, pt);
+      const ft = parseFloat(prompt('Enter real distance (feet):','10')) || 10;
+      pg.scalePxPerFt = px/ft; calibFirst=null; calibAwait=null;
+      alert('Calibrated: '+(px/ft).toFixed(2)+' px/ft');
+      return;
+    }
+    if(measureMode){
+      if(!measureFirst){ measureFirst=pt; return; }
+      const m={id:id(), points:[measureFirst, pt], feet:null};
+      if(pg.scalePxPerFt){ m.feet = dist(measureFirst,pt)/pg.scalePxPerFt; }
+      pg.measurements = pg.measurements||[]; pg.measurements.push(m); measureFirst=null; drawMeasurements(); saveProject(project);
+    }
+  });
 
   /*************************
    * Photo modal & measure *
    *************************/
-  function getCurrentPhoto(){
-    const ph = photoState.pin?.photos?.[photoState.idx];
-    return ph || null;
-    }
-
   function openPhotoModal(){
     const p=selectedPin(); if(!p) return alert('Select a pin first.');
     if(!p.photos.length) return alert('No photos attached.');
     photoState.pin=p; photoState.idx=0; showPhoto(); photoModal.style.display='flex';
-    photoPreview = null; photoMeasureFirst = null;
   }
+  function closePhotoModal(){ photoModal.style.display='none'; photoState.measuring=false; photoState.start=null; clearPhotoOverlay(); }
+
+  function clearPhotoOverlay(){
+    while(photoOverlay.firstChild) photoOverlay.removeChild(photoOverlay.firstChild);
+  }
+  function drawPhotoOverlayLine(a,b){
+    clearPhotoOverlay();
+    const line=document.createElementNS('http://www.w3.org/2000/svg','line');
+    line.setAttribute('x1',a.x); line.setAttribute('y1',a.y);
+    line.setAttribute('x2',b.x); line.setAttribute('y2',b.y);
+    line.setAttribute('stroke','#22c55e'); line.setAttribute('stroke-width','3');
+    photoOverlay.appendChild(line);
+  }
+
   function showPhoto(){
-    const ph=getCurrentPhoto(); if(!ph) return;
-    photoImg.src=ph.dataUrl; photoPinId.textContent=photoState.pin.id; photoName.textContent=ph.name||'Photo';
+    const ph=photoState.pin.photos[photoState.idx];
+    photoImg.src=ph.dataUrl;
+    photoPinId.textContent=photoState.pin.id;
+    photoName.textContent=ph.name;
     photoMeaCount.textContent=(ph.measurements?.length||0);
     drawPhotoMeasurements();
-  }
-  function closePhotoModal(){
-    photoModal.style.display='none';
-    photoPreview=null; photoMeasureFirst=null;
+    renderPhotoThumbs();
   }
 
-  // Draw measurements (and live preview) on photo
+  function renderPhotoThumbs(){
+    photoThumbRow.innerHTML='';
+    const arr = photoState.pin.photos || [];
+    arr.forEach((ph, i)=>{
+      const im = document.createElement('img');
+      im.className = 'phThumb'+(i===photoState.idx?' active':'');
+      im.src = ph.dataUrl;
+      im.onclick = ()=>{ photoState.idx = i; showPhoto(); };
+      photoThumbRow.appendChild(im);
+    });
+  }
+
   function drawPhotoMeasurements(){
     while(photoMeasureSvg.firstChild) photoMeasureSvg.removeChild(photoMeasureSvg.firstChild);
-    const ph=getCurrentPhoto(); if(!ph) return;
-
-    // existing measurements
-    (ph.measurements||[]).forEach(m=>{
+    const ph=photoState.pin?.photos[photoState.idx]; if(!ph||!ph.measurements) return;
+    ph.measurements.forEach(m=>{
       const a=m.points[0], b=m.points[1];
       const dx=Math.abs(a.x-b.x), dy=Math.abs(a.y-b.y);
       const color=(dx>dy)? '#ef4444' : (dy>dx)? '#3b82f6' : '#f59e0b';
       const line=document.createElementNS('http://www.w3.org/2000/svg','line');
-      line.setAttribute('x1',a.x); line.setAttribute('y1',a.y); line.setAttribute('x2',b.x); line.setAttribute('y2',b.y); line.setAttribute('stroke',color);
+      line.setAttribute('x1',a.x); line.setAttribute('y1',a.y);
+      line.setAttribute('x2',b.x); line.setAttribute('y2',b.y);
+      line.setAttribute('stroke',color); line.setAttribute('stroke-width','3');
       photoMeasureSvg.appendChild(line);
+
       const midx=(a.x+b.x)/2, midy=(a.y+b.y)/2;
       const text=document.createElementNS('http://www.w3.org/2000/svg','text');
-      const label = m.label ? m.label : (m.feet ? (m.feet.toFixed(2)+' ft') : (dist(a,b).toFixed(0)+' px'));
-      text.setAttribute('x',midx); text.setAttribute('y',midy-6); text.textContent=label;
-      photoMeasureSvg.appendChild(text);
+      const ft = m.feet!=null ? m.feet.toFixed(2)+' ft'
+               : (ph.scalePxPerFt ? (dist(a,b)/ph.scalePxPerFt).toFixed(2)+' ft' : (dist(a,b).toFixed(0)+' px'));
+      text.setAttribute('x',midx); text.setAttribute('y',midy-6);
+      text.textContent=ft; photoMeasureSvg.appendChild(text);
     });
-
-    // live preview while drawing
-    if(photoPreview){
-      const a=photoPreview.a, b=photoPreview.b;
-      const line=document.createElementNS('http://www.w3.org/2000/svg','line');
-      line.setAttribute('x1',a.x); line.setAttribute('y1',a.y); line.setAttribute('x2',b.x); line.setAttribute('y2',b.y);
-      line.setAttribute('stroke','#22c55e'); line.setAttribute('stroke-dasharray','6 4');
-      photoMeasureSvg.appendChild(line);
-    }
   }
 
-  // Photo toolbar handlers
-  on($('btnPhotoClose'),'click',()=> closePhotoModal());
+  /* Rubber-band measurement on photo */
+  function photoLocalFromEvent(ev){
+    const r=photoImg.getBoundingClientRect();
+    return { x: ev.clientX - r.left + photoImg.scrollLeft, y: ev.clientY - r.top + photoImg.scrollTop };
+  }
+
   on($('btnPhotoMeasure'),'click',()=>{
-    photoState.measure=!photoState.measure;
-    $('btnPhotoMeasure').textContent='Measure: '+(photoState.measure?'ON':'OFF');
-    photoPreview=null; photoMeasureFirst=null; drawPhotoMeasurements();
+    photoState.measuring=!photoState.measuring;
+    $('btnPhotoMeasure').textContent = 'Measure: ' + (photoState.measuring?'ON':'OFF');
+    photoState.start=null; clearPhotoOverlay();
   });
-  on($('btnPhotoCalib'),'click',()=>{ photoState.calib=null; alert('Photo calibration: click two points on the image (optional).'); });
+  on($('btnPhotoCalib'),'click',()=>{
+    const ph=photoState.pin?.photos[photoState.idx]; if(!ph) return;
+    ph.scalePxPerFt = null; alert('Calibration cleared. Draw a line and enter a known length to re-calibrate.');
+  });
+  on($('btnPhotoClose'),'click',()=> closePhotoModal());
   on($('btnPhotoPrev'),'click',()=>{ if(!photoState.pin) return; photoState.idx=Math.max(0,photoState.idx-1); showPhoto(); });
   on($('btnPhotoNext'),'click',()=>{ if(!photoState.pin) return; photoState.idx=Math.min(photoState.pin.photos.length-1,photoState.idx+1); showPhoto(); });
-  on($('btnPhotoDelete'),'click',()=>{
-    if(!photoState.pin) return;
-    if(!confirm('Delete this photo?')) return;
-    commit();
-    photoState.pin.photos.splice(photoState.idx,1);
-    photoState.idx=Math.max(0,photoState.idx-1);
-    saveProject(project);
-    if(photoState.pin.photos.length===0){ closePhotoModal(); } else { showPhoto(); }
+  on($('btnPhotoDelete'),'click',()=>{ const pin=photoState.pin; if(!pin) return; if(!confirm('Delete this photo?')) return; const arr=pin.photos; arr.splice(photoState.idx,1); photoState.idx=Math.max(0,photoState.idx-1); saveProject(project); if(!arr.length){ closePhotoModal(); } else { showPhoto(); } });
+  on($('btnPhotoDownload'),'click',()=>{ const ph=photoState.pin?.photos[photoState.idx]; if(!ph) return; downloadFile(ph.name||'photo.png', dataURLtoBlob(ph.dataUrl)); });
+
+  // Mouse interactions on viewer
+  photoImg.addEventListener('mousedown',(e)=>{
+    if(!photoState.measuring) return;
+    const ph=photoState.pin?.photos[photoState.idx]; if(!ph) return;
+    photoState.start = photoLocalFromEvent(e);
+    drawPhotoOverlayLine(photoState.start, photoState.start);
   });
-  on($('btnPhotoDownload'),'click',()=>{ const ph=getCurrentPhoto(); if(!ph) return; downloadFile(ph.name||'photo.png', dataURLtoBlob(ph.dataUrl)); });
-
-  // Photo measurement clicks + live preview
-  on(photoMeasureSvg,'pointermove',(e)=>{
-    if(!photoState.measure) return;
-    if(!photoMeasureFirst) return;
-    const rect = photoImg.getBoundingClientRect();
-    photoPreview = { a: photoMeasureFirst, b: {x:e.clientX-rect.left, y:e.clientY-rect.top} };
-    drawPhotoMeasurements();
+  photoImg.addEventListener('mousemove',(e)=>{
+    if(!photoState.measuring || !photoState.start) return;
+    const cur = photoLocalFromEvent(e);
+    drawPhotoOverlayLine(photoState.start, cur);
   });
-  on(photoMeasureSvg,'click',(e)=>{
-    const ph = getCurrentPhoto(); if(!ph) return;
-    if(!photoState.measure) return;
-    const rect = photoImg.getBoundingClientRect();
-    const pt = { x: e.clientX-rect.left, y:e.clientY-rect.top };
+  photoImg.addEventListener('mouseup',(e)=>{
+    if(!photoState.measuring || !photoState.start) return;
+    const ph=photoState.pin?.photos[photoState.idx]; if(!ph) return;
+    const end = photoLocalFromEvent(e);
+    const px = dist(photoState.start, end);
 
-    // if calibrating (optional), store first & second to set scale
-    if(photoState.calib===null && photoMeasureFirst===null){
-      // Using measure mode; if user intended calibration, they should press Calibrate first.
-      // So we proceed with measure drawing below.
+    // Ask for real length (ft) — this both stores the measure and sets/updates calibration
+    const entered = prompt('Enter measured length (feet) for this line (e.g., 6.5):','');
+    let feet = null;
+    if(entered!=null && entered.trim()!==''){
+      const val = parseFloat(entered);
+      if(!isNaN(val) && val>0){
+        feet = val;
+        ph.scalePxPerFt = px / feet; // (re)calibrate from this entry
+      }
     }
-
-    if(!photoMeasureFirst){
-      photoMeasureFirst = pt;
-      photoPreview = { a:pt, b:pt };
-      drawPhotoMeasurements();
-      return;
-    }
-
-    // finish segment
-    const a = photoMeasureFirst, b = pt;
-    photoMeasureFirst = null;
-    photoPreview = null;
-
-    // Ask user for their own measurement label
-    const value = prompt('Enter measurement (e.g., "7.25 ft" or "2200 mm"):', '');
-    const m = { id:id(), kind:'photo', points:[a,b] };
-    if(value && value.trim()){
-      m.label = value.trim();
-      // If the user typed a raw number, store as feet as a backup
-      const num = parseFloat(value);
-      if(!isNaN(num)) m.feet = num;
-    }
+    // Store measurement
     ph.measurements = ph.measurements || [];
-    ph.measurements.push(m);
-    drawPhotoMeasurements();
-    $('photoMeaCount').textContent = ph.measurements.length.toString();
+    ph.measurements.push({ id:id(), points:[photoState.start, end], feet: feet });
     saveProject(project);
+    clearPhotoOverlay();
+    photoState.start=null;
+    drawPhotoMeasurements();
+    photoMeaCount.textContent = ph.measurements.length;
   });
 
   /****************
@@ -633,65 +678,56 @@ document.addEventListener('DOMContentLoaded', () => {
    ****************/
   function toRows(){
     const rows=[];
-    project.pages.forEach(pg=> (pg.pins||[]).forEach(p=> rows.push({
-      id:p.id,
-      sign_type:p.sign_type||'',
-      custom_label:p.custom_label||'',
-      room_number:p.room_number||'',
-      room_name:p.room_name||'',
-      building:p.building||'',
-      level:p.level||'',
-      x_pct:fix(p.x_pct),
-      y_pct:fix(p.y_pct),
-      notes:p.notes||'',
-      // GPS intentionally removed
-      page_name:pg.name,
-      last_edited: new Date(p.lastEdited||project.updatedAt).toISOString()
-    })));
-    rows.sort((a,b)=>
-      (a.building||'').localeCompare(b.building||'') ||
-      (a.level||'').localeCompare(b.level||'') ||
-      a.room_number.localeCompare(b.room_number, undefined, {numeric:true,sensitivity:'base'})
-    );
+    project.pages.forEach(pg=> (pg.pins||[]).forEach(p=>{
+      rows.push({
+        id:p.id,
+        sign_type:p.sign_type||'',
+        label:p.label||'',
+        room_number:p.room_number||'',
+        room_name:p.room_name||'',
+        building:p.building||'',
+        level:p.level||'',
+        x_pct:fix(p.x_pct),
+        y_pct:fix(p.y_pct),
+        notes:p.notes||'',
+        page_name:pg.name,
+        last_edited:new Date(p.lastEdited||project.updatedAt).toISOString()
+      });
+    }));
+    rows.sort((a,b)=> (a.building||'').localeCompare(b.building||'')
+      || (a.level||'').localeCompare(b.level||'')
+      || a.room_number.localeCompare(b.room_number, undefined, {numeric:true,sensitivity:'base'}) );
     return rows;
   }
 
   function exportCSV(){
     const rows = toRows();
-    const header = Object.keys(rows[0]||{});
-    const csv=[header.join(','), ...rows.map(r=>header.map(h=>csvEscape(r[h])).join(','))].join('\n');
+    const csv=[Object.keys(rows[0]||{}).join(','), ...rows.map(r=>Object.values(r).map(v=>csvEscape(v)).join(','))].join('\n');
     downloadText(project.name.replace(/\W+/g,'_')+"_signage.csv", csv);
   }
 
   function exportXLSX(){
-    if(typeof XLSX==='undefined'){ alert('XLSX library not loaded.'); return; }
     const rows = toRows(); const wb = XLSX.utils.book_new();
     const info=[[ 'Project', project.name ], [ 'Exported', new Date().toLocaleString() ], [ 'Total Signs', rows.length ], [ 'Total Pages', project.pages.length ]];
     const counts = {}; rows.forEach(r=> counts[r.sign_type]=(counts[r.sign_type]||0)+1 );
     info.push([]); info.push(['Breakdown']); Object.entries(counts).forEach(([k,v])=> info.push([k,v]));
     const wsInfo = XLSX.utils.aoa_to_sheet(info);
     const ws = XLSX.utils.json_to_sheet(rows, {header: Object.keys(rows[0]||{})});
-    XLSX.utils.book_append_sheet(wb, wsInfo, 'Project Info');
-    XLSX.utils.book_append_sheet(wb, ws, 'Signage');
+    XLSX.utils.book_append_sheet(wb, wsInfo, 'Project Info'); XLSX.utils.book_append_sheet(wb, ws, 'Signage');
     const out = XLSX.write(wb, {bookType:'xlsx', type:'array'});
     downloadFile(project.name.replace(/\W+/g,'_')+'_signage.xlsx', new Blob([out], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
   }
 
   async function exportZIP(){
-    if(typeof JSZip==='undefined'){ alert('JSZip library not loaded.'); return; }
     const rows=toRows(); const zip=new JSZip();
-    const header = Object.keys(rows[0]||{});
-    const csv=[header.join(','), ...rows.map(r=>header.map(h=>csvEscape(r[h])).join(','))].join('\n');
-    zip.file('signage.csv', csv);
+    zip.file('signage.csv', [Object.keys(rows[0]||{}).join(','), ...rows.map(r=>Object.values(r).map(v=>csvEscape(v)).join(','))].join('\n'));
     // photos
-    project.pages.forEach(pg=>{
-      (pg.pins||[]).forEach(pin=>{
-        (pin.photos||[]).forEach((ph, idx)=>{
-          const folder=zip.folder(`photos/${pin.id}`);
-          folder.file(ph.name||`photo_${idx+1}.png`, dataURLtoArrayBuffer(ph.dataUrl));
-        });
+    project.pages.forEach(pg=> (pg.pins||[]).forEach(pin=>{
+      (pin.photos||[]).forEach((ph, idx)=>{
+        const folder=zip.folder(`photos/${pin.id}`);
+        folder.file(ph.name||`photo_${idx+1}.png`, dataURLtoArrayBuffer(ph.dataUrl));
       });
-    });
+    }));
     const blob = await zip.generateAsync({type:'blob'});
     downloadFile(project.name.replace(/\W+/g,'_')+'_export.zip', blob);
   }
@@ -699,84 +735,145 @@ document.addEventListener('DOMContentLoaded', () => {
   function importCSV(text){
     const lines = text.split(/\r?\n/).filter(Boolean);
     if(lines.length<2) return;
-    const hdr=lines[0].split(',').map(h=>h.trim());
-    commit();
+    const hdr=lines[0].split(',').map(h=>h.trim()); commit();
     for(let i=1;i<lines.length;i++){
-      const cells = parseCsvLine(lines[i]); const row={};
-      hdr.forEach((h,idx)=> row[h]=cells[idx]||'');
+      const cells = parseCsvLine(lines[i]); const row={}; hdr.forEach((h,idx)=> row[h]=cells[idx]||'');
       const p = makePin(parseFloat(row.x_pct)||50, parseFloat(row.y_pct)||50);
-      p.sign_type=row.sign_type||'';
-      p.custom_label=row.custom_label||'';
-      p.room_number=row.room_number||'';
-      p.room_name=row.room_name||'';
-      p.building=row.building||'';
-      p.level=row.level||'';
-      p.notes=row.notes||'';
+      p.sign_type=row.sign_type||''; p.label=row.label||''; p.room_number=row.room_number||''; p.room_name=row.room_name||'';
+      p.building=row.building||''; p.level=row.level||''; p.notes=row.notes||'';
       currentPage().pins.push(p);
     }
-    saveProject(project);
-    renderPins();
-    renderPinsList();
-    alert('Imported rows into current page.');
+    saveProject(project); renderPins(); renderPinsList(); alert('Imported rows into current page.');
   }
 
   /****************
-   * Toolbar wiring
+   * Toolbar hooks
    ****************/
-  // New / Open / Save As / Rename (simple version – uses prompts for Open)
-  on($('btnNew'),'click',()=>{
-    const name=prompt('New project name?','New Project'); if(!name) return;
-    commit();
-    const p=newProject(name);
-    saveProject(p);
-    selectProject(p.id);
+  on($('btnBackHome'),'click',()=> switchView('home'));
+  on($('btnRename'),'click',()=>{
+    const name=prompt('Rename project:', project.name);
+    if(!name) return;
+    commit(); project.name=name; saveProject(project); renderProjectLabel(); renderHome();
   });
-
-  on($('btnOpen'),'click',()=>{
-    const items = projects.map(p=>`• ${p.name} (${new Date(p.updatedAt).toLocaleString()}) [${p.id}]`).join('\n');
-    const id = prompt('Projects:\n'+items+'\n\nEnter project id to open:');
-    const found = projects.find(p=>p.id===id);
-    if(found){ selectProject(found.id); } else alert('Not found');
-  });
-
   on($('btnSaveAs'),'click',()=>{
-    const name=prompt('Duplicate as name:', project.name+' (copy)'); if(!name) return;
+    const name=prompt('Duplicate name:', project.name+' (copy)');
+    if(!name) return;
     commit();
     const copy=JSON.parse(JSON.stringify(project));
     copy.id=id(); copy.name=name; copy.createdAt=Date.now(); copy.updatedAt=Date.now();
     saveProject(copy);
-    selectProject(copy.id);
+    alert('Duplicated as "'+name+'". Find it in Projects.');
   });
 
-  on($('btnRename'),'click',()=>{
-    const name=prompt('Rename project:', project.name); if(!name) return;
-    commit(); project.name=name; saveProject(project); renderProjectLabel();
-  });
-
-  // Upload maps/plans (image/pdf)
   on($('btnUpload'),'click',()=> inputUpload.click());
   on(inputUpload,'change', async (e)=>{
-    const files=[...e.target.files]; if(!files.length) return;
-    commit();
+    const files=[...e.target.files]; if(!files.length) return; commit();
     for(const f of files){
       if(f.type==='application/pdf'){ await addPdfPages(f); }
       else if(f.type.startsWith('image/')){ const url=URL.createObjectURL(f); const name=f.name.replace(/\.[^.]+$/,''); addImagePage(url,name); }
     }
-    renderAll();
   });
 
-  // Export / Import
   on($('btnExportCSV'),'click',()=> exportCSV());
   on($('btnExportXLSX'),'click',()=> exportXLSX());
   on($('btnExportZIP'),'click',()=> exportZIP());
   on($('btnImportCSV'),'click',()=> $('inputImportCSV').click());
-  on($('inputImportCSV'),'change', async (e)=>{
-    const f=e.target.files?.[0]; if(!f) return; const text=await f.text(); importCSV(text);
+  on($('inputImportCSV'),'change', async (e)=>{ const f=e.target.files?.[0]; if(!f) return; const text=await f.text(); importCSV(text); });
+  on($('btnOCR'),'click',()=> ocrCurrentView());
+
+  const btnCalibrate = $('btnCalibrate');
+  const btnMeasureToggle = $('btnMeasureToggle');
+  const btnMeasureReset = $('btnMeasureReset');
+  on(btnCalibrate,'click',()=> startCalibration('main'));
+  on(btnMeasureToggle,'click',()=> toggleMeasuring('main'));
+  on(btnMeasureReset,'click',()=> resetMeasurements('main'));
+
+  on($('btnUndo'),'click',()=> undo());
+  on($('btnRedo'),'click',()=> redo());
+
+  on($('btnClearPins'),'click',()=>{ if(!confirm('Clear ALL pins on this page?')) return; commit(); currentPage().pins=[]; saveProject(project); renderAll(); });
+  on($('btnAddPin'),'click',()=> startAddPin());
+
+  on(inputBuilding,'input',()=>{ projectContext.building = inputBuilding.value; });
+  on(inputLevel,'input',()=>{ projectContext.level = inputLevel.value; });
+
+  on(inputSearch,'input',()=> renderPinsList());
+  on(filterType,'change',()=> renderPins());
+  on(toggleField,'change',()=>{ project.settings.fieldMode = !!toggleField.checked; saveProject(project); renderPins(); });
+
+  // Right fields update
+  [fieldType, fieldLabel, fieldRoomNum, fieldRoomName, fieldBuilding, fieldLevel, fieldNotes].forEach(el=> on(el,'input',()=>{
+    const pin = selectedPin(); if(!pin) return; commit();
+    if(el===fieldType) pin.sign_type = el.value || '';
+    if(el===fieldLabel) pin.label = el.value || '';
+    if(el===fieldRoomNum) pin.room_number = el.value || '';
+    if(el===fieldRoomName) pin.room_name = el.value || '';
+    if(el===fieldBuilding) pin.building = el.value || '';
+    if(el===fieldLevel) pin.level = el.value || '';
+    if(el===fieldNotes) pin.notes = el.value || '';
+    pin.lastEdited=Date.now(); saveProject(project); renderPins(); renderWarnings(); renderPinsList();
+  }));
+
+  on($('btnAddPhoto'),'click',()=> $('inputPhoto').click());
+  on($('inputPhoto'),'change', async (e)=>{
+    const pin = selectedPin(); if(!pin) return alert('Select a pin first.');
+    const files=[...e.target.files]; if(!files.length) return; commit();
+    for(const f of files){ const url=await fileToDataURL(f); pin.photos.push({name:f.name,dataUrl:url,measurements:[]}); }
+    pin.lastEdited=Date.now(); saveProject(project); renderPinsList(); alert('Photo(s) added.');
   });
 
-  // OCR
-  on($('btnOCR'),'click', async ()=>{
-    if(typeof Tesseract==='undefined'){ alert('Tesseract library not loaded.'); return; }
+  on($('btnOpenPhoto'),'click',()=> openPhotoModal());
+  on($('btnDuplicate'),'click',()=>{ const pin=selectedPin(); if(!pin) return; commit(); const p=JSON.parse(JSON.stringify(pin)); p.id=id(); p.x_pct=Math.min(100, pin.x_pct+2); p.y_pct=Math.min(100, pin.y_pct+2); p.lastEdited=Date.now(); currentPage().pins.push(p); saveProject(project); renderPins(); renderPinsList(); selectPin(p.id); });
+  on($('btnDelete'),'click',()=>{ const pin=selectedPin(); if(!pin) return; if(!confirm('Delete selected pin?')) return; commit(); const pg=currentPage(); pg.pins=(pg.pins||[]).filter(x=>x.id!==pin.id); saveProject(project); renderPins(); renderPinsList(); project._sel=null; updatePinDetails(); });
+
+  function startAddPin(){
+    addingPin=!addingPin;
+    $('btnAddPin').classList.toggle('acc', addingPin);
+    if(addingPin){ alert('Click on the page to place a new pin.'); }
+  }
+
+  /********************
+   * Stage interactions
+   ********************/
+  stage.addEventListener('pointerdown',(e)=>{
+    if(e.target.classList.contains('pin')) return;
+    if(!addingPin) return;
+    const local = toPctCoords(e.clientX, e.clientY);
+    commit();
+    const p = makePin(local.x_pct, local.y_pct);
+    const pg=currentPage();
+    pg.pins = pg.pins || [];
+    pg.pins.push(p);
+    saveProject(project); renderPins(); renderPinsList(); selectPin(p.id);
+    addingPin=false; $('btnAddPin').classList.remove('acc');
+  });
+
+  // Dragging pins
+  pinLayer.addEventListener('pointermove',(e)=>{
+    if(!draggingEl || !draggingPin) return;
+    e.preventDefault();
+    const pc = toPctCoords(e.clientX, e.clientY);
+    draggingEl.style.left = pc.x_pct+'%';
+    draggingEl.style.top = pc.y_pct+'%';
+    posLabel.textContent = pctLabel(pc.x_pct, pc.y_pct);
+  });
+  pinLayer.addEventListener('pointerup',(e)=>{
+    if(!draggingEl || !draggingPin) return;
+    const pc = toPctCoords(e.clientX, e.clientY);
+    commit();
+    draggingPin.x_pct = pc.x_pct;
+    draggingPin.y_pct = pc.y_pct;
+    draggingPin.lastEdited = Date.now();
+    saveProject(project); renderPinsList();
+    draggingEl.releasePointerCapture?.(e.pointerId);
+    draggingEl=null; draggingPin=null;
+    updatePinDetails();
+  });
+
+  /****************
+   * OCR (stage)  *
+   ****************/
+  async function ocrCurrentView(){
     const canvas = document.createElement('canvas');
     const img=stageImage; if(!img || !img.src){ alert('No page image.'); return; }
     const w=img.naturalWidth||img.width, h=img.naturalHeight||img.height;
@@ -787,175 +884,51 @@ document.addEventListener('DOMContentLoaded', () => {
     const head = out.slice(0,200);
     try { await navigator.clipboard.writeText(out); } catch{}
     inputSearch.value=head; renderPinsList(); alert('OCR done. First 200 chars placed in search. Full text copied to clipboard.');
-  });
+  }
 
-  // Measure main
-  const btnCalibrate = $('btnCalibrate');
-  const btnMeasureToggle = $('btnMeasureToggle');
-  const btnMeasureReset = $('btnMeasureReset');
-  on(btnCalibrate,'click',()=> startCalibration('main'));
-  on(btnMeasureToggle,'click',()=> toggleMeasuring('main'));
-  on(btnMeasureReset,'click',()=> resetMeasurements('main'));
-
-  // Undo/Redo
-  on($('btnUndo'),'click',()=> undo());
-  on($('btnRedo'),'click',()=> redo());
-
-  // Clear/Add pin
-  on($('btnClearPins'),'click',()=>{
-    if(!confirm('Clear ALL pins on this page?')) return;
-    commit(); currentPage().pins=[]; renderAll();
-  });
-  on($('btnAddPin'),'click',()=>{
-    addingPin=!addingPin;
-    $('btnAddPin').classList.toggle('ok', addingPin);
-  });
-
-  // Search & filter
-  on(inputSearch,'input',()=> renderPinsList());
-  on(filterType,'change',()=> renderPins());
-
-  // Strict & Field toggles
-  on(toggleStrict,'change',()=>{ project.settings.strictRules = !!toggleStrict.checked; saveProject(project); renderWarnings(); });
-  on(toggleField,'change',()=>{ project.settings.fieldMode = !!toggleField.checked; saveProject(project); renderPins(); });
-
-  // Default Building/Level context
-  on(inputBuilding,'input',()=>{ projectContext.building = inputBuilding.value; });
-  on(inputLevel,'input',()=>{ projectContext.level = inputLevel.value; });
-
-  // Right panel field wiring
-  [fieldType, fieldRoomNum, fieldRoomName, fieldBuilding, fieldLevel, fieldNotes].forEach(el=> on(el,'input',()=>{
-    const pin = selectedPin(); if(!pin) return;
-    commit();
-    if(el===fieldType) pin.sign_type = el.value || '';
-    if(el===fieldRoomNum) pin.room_number = el.value || '';
-    if(el===fieldRoomName) pin.room_name = el.value || '';
-    if(el===fieldBuilding) pin.building = el.value || '';
-    if(el===fieldLevel) pin.level = el.value || '';
-    if(el===fieldNotes) pin.notes = el.value || '';
-    pin.lastEdited=Date.now(); saveProject(project); renderPins(); renderWarnings(); renderPinsList();
-  }));
-
-  // Photos: add/open/duplicate/delete
-  on($('btnAddPhoto'),'click',()=> $('inputPhoto').click());
-  on($('inputPhoto'),'change', async (e)=>{
-    const pin = selectedPin(); if(!pin) return alert('Select a pin first.');
-    const files=[...e.target.files]; if(!files.length) return;
-    commit();
-    for(const f of files){
-      const url=await fileToDataURL(f);
-      pin.photos.push({name:f.name,dataUrl:url,measurements:[]});
-    }
-    pin.lastEdited=Date.now(); saveProject(project); renderPinsList(); alert('Photo(s) added.');
-  });
-  on($('btnOpenPhoto'),'click',()=> openPhotoModal());
-  on($('btnDuplicate'),'click',()=>{
-    const pin=selectedPin(); if(!pin) return;
-    commit();
-    const p=JSON.parse(JSON.stringify(pin));
-    p.id=id(); p.x_pct=Math.min(100, pin.x_pct+2); p.y_pct=Math.min(100, pin.y_pct+2);
-    p.lastEdited=Date.now();
-    currentPage().pins.push(p);
-    saveProject(project); renderPins(); renderPinsList(); selectPin(p.id);
-  });
-  on($('btnDelete'),'click',()=>{
-    const pin=selectedPin(); if(!pin) return;
-    if(!confirm('Delete selected pin?')) return;
-    commit();
-    currentPage().pins=currentPage().pins.filter(x=>x.id!==pin.id);
-    saveProject(project); renderPins(); renderPinsList(); project._sel=null; updatePinDetails();
-  });
-
-  on($('btnBulkType'),'click',()=>{
-    const type = prompt('Enter type for selected checkboxes (or empty to cancel):');
-    if(type==null) return;
-    commit();
-    const ids = checkedPinIds();
-    ids.forEach(idv=>{ const p=findPin(idv); if(p){ p.sign_type=type; p.lastEdited=Date.now(); }});
-    saveProject(project); renderPins(); renderPinsList();
-  });
-  on($('btnBulkBL'),'click',()=>{
-    const b = prompt('Building value (blank to keep):', inputBuilding.value||''); if(b==null) return;
-    const l = prompt('Level value (blank to keep):', inputLevel.value||''); if(l==null) return;
-    commit();
-    const ids = checkedPinIds();
-    ids.forEach(idv=>{
-      const p=findPin(idv);
-      if(p){
-        if(b!=='') p.building=b; if(l!=='') p.level=l;
-        p.lastEdited=Date.now();
-      }
-    });
-    saveProject(project); renderPins(); renderPinsList();
-  });
-
-  // Stage click to place a pin if addingPin=true
-  on($('stage'),'pointerdown',(e)=>{
-    if(e.target.classList.contains('pin')) return;
-    if(!addingPin) return;
-    const {x_pct,y_pct} = toPctCoords(e);
-    commit();
-    const p = makePin(x_pct,y_pct);
-    currentPage().pins.push(p);
-    saveProject(project);
-    renderPins();
-    renderPinsList();
-    selectPin(p.id);
-    addingPin=false; $('btnAddPin').classList.remove('ok');
-  });
-
-  /***************
-   * Undo / Redo *
-   ***************/
+  /*************
+   * Undo/Redo *
+   *************/
   function snapshot(){ return JSON.stringify(project); }
   function loadSnapshot(s){
-    project=JSON.parse(s);
-    const i=projects.findIndex(p=>p.id===project.id);
-    if(i>=0) projects[i]=project; else projects.push(project);
+    const restored=JSON.parse(s);
+    const i=projects.findIndex(p=>p.id===restored.id);
+    if(i>=0) projects[i]=restored; else projects.push(restored);
     localStorage.setItem('survey:projects', JSON.stringify(projects));
-    localStorage.setItem('survey:lastOpenProjectId', project.id);
+    localStorage.setItem('survey:lastOpenProjectId', restored.id);
+    project = restored;
   }
   function commit(){ UNDO.push(snapshot()); if(UNDO.length>MAX_UNDO) UNDO.shift(); REDO.length=0; }
   function undo(){ if(!UNDO.length) return; REDO.push(snapshot()); const s=UNDO.pop(); loadSnapshot(s); renderAll(); }
   function redo(){ if(!REDO.length) return; UNDO.push(snapshot()); const s=REDO.pop(); loadSnapshot(s); renderAll(); }
 
-  /**********************
-   * Init / Resize stuff
-   **********************/
-  // Load / init project state
-  projects = loadProjects();
-  currentProjectId = localStorage.getItem('survey:lastOpenProjectId') || null;
-  project = currentProjectId ? projects.find(p=>p.id===currentProjectId) : null;
-  if(!project){ project = newProject('Untitled Project'); saveProject(project); }
-  selectProject(project.id);
-
-  // Ensure SVG matches stage size
-  const ro=new ResizeObserver(()=>{
-    measureSvg.setAttribute('width', stage.clientWidth);
-    measureSvg.setAttribute('height', stage.clientHeight);
-  });
-  ro.observe(stage);
-
   // Keyboard shortcuts
   window.addEventListener('keydown',(e)=>{
     if((e.ctrlKey||e.metaKey) && !e.shiftKey && e.key.toLowerCase()==='z'){ e.preventDefault(); undo(); }
     if((e.ctrlKey||e.metaKey) && e.shiftKey && e.key.toLowerCase()==='z'){ e.preventDefault(); redo(); }
-    if(e.key==='Delete'){
-      const p=selectedPin(); if(p){
-        commit(); currentPage().pins=currentPage().pins.filter(x=>x.id!==p.id);
-        saveProject(project); renderPins(); renderPinsList(); project._sel=null; updatePinDetails();
-      }
-    }
+    if(e.key==='Delete'){ const p=selectedPin(); if(p){ commit(); const pg=currentPage(); pg.pins=(pg.pins||[]).filter(x=>x.id!==p.id); saveProject(project); renderPins(); renderPinsList(); project._sel=null; updatePinDetails(); } }
     if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)){
-      const p=selectedPin(); if(!p) return; e.preventDefault();
-      commit();
+      const p=selectedPin(); if(!p) return; e.preventDefault(); commit();
       const delta = project.settings.fieldMode? 0.5 : 0.2;
       if(e.key==='ArrowUp') p.y_pct=Math.max(0,p.y_pct-delta);
       if(e.key==='ArrowDown') p.y_pct=Math.min(100,p.y_pct+delta);
       if(e.key==='ArrowLeft') p.x_pct=Math.max(0,p.x_pct-delta);
       if(e.key==='ArrowRight') p.x_pct=Math.min(100,p.x_pct+delta);
-      p.lastEdited=Date.now();
-      saveProject(project); renderPins(); updatePinDetails();
+      p.lastEdited=Date.now(); saveProject(project); renderPins(); updatePinDetails();
     }
   });
+
+  /********************
+   * Initial bootstrap *
+   ********************/
+  projects = loadProjects();
+  const last = localStorage.getItem('survey:lastOpenProjectId');
+  if(last && projects.find(p=>p.id===last)){
+    selectProjectById(last);
+  }else{
+    switchView('home');
+  }
+
+  // Buttons in editor toolbar that rely on DOM after setup
+  on($('btnOpenPhoto'),'click',()=> openPhotoModal());
 });
