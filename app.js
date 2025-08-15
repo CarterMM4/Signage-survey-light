@@ -45,7 +45,6 @@ document.addEventListener('DOMContentLoaded', () => {
     'Stair - Ingress':'ING','Stair - Egress':'EGR'
   };
 
-  // Color rules by name (applies when type is empty)
   const NAME_COLOR_RULES = [
     { re:/exit/i, color:'#ef4444' },
     { re:/ingress|enter|entry/i, color:'#22c55e' },
@@ -191,6 +190,7 @@ document.addEventListener('DOMContentLoaded', () => {
    ******************/
   const thumbsEl = $('thumbs');
   const stage = $('stage');
+  const stageInner = $('stageInner');
   const stageImage = $('stageImage');
   const measureSvg = $('measureSvg');
   const pinLayer = $('pinLayer');
@@ -229,6 +229,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnMeasureToggle = $('btnMeasureToggle');
   const btnMeasureClear = $('btnMeasureClear');
 
+  // Zoom controls
+  const btnZoomIn = $('btnZoomIn');
+  const btnZoomOut = $('btnZoomOut');
+  const btnZoomReset = $('btnZoomReset');
+
   // Export/Import
   const btnExportCSV = $('btnExportCSV');
   const btnExportXLSX = $('btnExportXLSX');
@@ -249,6 +254,32 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnPhotoNext = $('btnPhotoNext');
   const btnPhotoDelete = $('btnPhotoDelete');
   const btnPhotoDownload = $('btnPhotoDownload');
+
+  /******************
+   * Zoom (stage)
+   ******************/
+  let stageZoom = 1;
+  function applyZoom(){
+    stageInner.style.transform = `scale(${stageZoom})`;
+    // Resize overlay SVG to match image's rendered box at current zoom
+    const rect = stageImage.getBoundingClientRect();
+    measureSvg.setAttribute('width', rect.width);
+    measureSvg.setAttribute('height', rect.height);
+  }
+  function zoomBy(f){ stageZoom = clamp(stageZoom * f, 0.25, 6); applyZoom(); }
+  function zoomReset(){ stageZoom = 1; applyZoom(); }
+
+  on(btnZoomIn,'click',()=> zoomBy(1.2));
+  on(btnZoomOut,'click',()=> zoomBy(1/1.2));
+  on(btnZoomReset,'click', zoomReset);
+
+  // Ctrl + wheel zoom (pinch on trackpads triggers ctrlKey=true in many browsers)
+  on(stage,'wheel',(e)=>{
+    if(!e.ctrlKey) return; // avoid hijacking normal scroll
+    e.preventDefault();
+    const dir = e.deltaY > 0 ? (1/1.15) : 1.15;
+    zoomBy(dir);
+  }, {passive:false});
 
   /******************
    * Editor helpers
@@ -366,6 +397,7 @@ document.addEventListener('DOMContentLoaded', () => {
     renderPinsList();
     toggleField.checked = !!project.settings.fieldMode;
     drawMeasurements();
+    applyZoom(); // sync overlay sizes
   }
 
   function renderProjectLabel(){
@@ -381,7 +413,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const inp = document.createElement('input'); inp.value = pg.name;
       on(inp,'input',()=>{ pg.name = inp.value; pg.updatedAt=Date.now(); saveProject(project); renderProjectLabel(); });
       d.appendChild(inp);
-      on(d,'click',()=>{ project._pageId=pg.id; saveProject(project); renderStage(); renderPins(); drawMeasurements(); });
+      on(d,'click',()=>{ project._pageId=pg.id; saveProject(project); renderStage(); renderPins(); drawMeasurements(); applyZoom(); });
       thumbsEl.appendChild(d);
     });
   }
@@ -390,6 +422,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const pg = currentPage();
     if(!pg){ stageImage.removeAttribute('src'); return; }
     stageImage.src = pg.blobUrl;
+    // Reset zoom when switching pages for clarity but keep user option
+    zoomReset();
   }
 
   function pctFromEvent(e){
@@ -486,13 +520,14 @@ document.addEventListener('DOMContentLoaded', () => {
   function updatePinFields(){
     const p = selectedPin();
     selId.textContent = p ? p.id : 'None';
-    fieldType.value = p?.sign_type || '';
-    fieldCustom.value = p?.custom_name || '';
-    fieldRoomNum.value = p?.room_number || '';
-    fieldRoomName.value = p?.room_name || '';
-    fieldBuilding.value = p?.building || '';
-    fieldLevel.value = p?.level || '';
-    fieldNotes.value = p?.notes || '';
+    // Guard against missing inputs
+    if(fieldType) fieldType.value = p?.sign_type || '';
+    if(fieldCustom) fieldCustom.value = p?.custom_name || '';
+    if(fieldRoomNum) fieldRoomNum.value = p?.room_number || '';
+    if(fieldRoomName) fieldRoomName.value = p?.room_name || '';
+    if(fieldBuilding) fieldBuilding.value = p?.building || '';
+    if(fieldLevel) fieldLevel.value = p?.level || '';
+    if(fieldNotes) fieldNotes.value = p?.notes || '';
     const x = Number(p?.x_pct||0).toFixed(2), y=Number(p?.y_pct||0).toFixed(2);
     posLabel.textContent = p ? `${x}%, ${y}%` : '—';
   }
@@ -535,20 +570,23 @@ document.addEventListener('DOMContentLoaded', () => {
     selectPin(p.id,true);
   });
 
-  // Dragging pins
+  // Dragging pins (fixed: listen on window so pointer capture works everywhere)
   let draggingPin = null;
-  on(pinLayer,'pointermove',(e)=>{
+  on(window,'pointermove',(e)=>{
     if(!draggingPin) return;
     const pt = pctFromEvent(e);
     draggingPin.el.style.left = pt.x_pct + '%';
     draggingPin.el.style.top = pt.y_pct + '%';
     posLabel.textContent = `${pt.x_pct.toFixed(2)}%, ${pt.y_pct.toFixed(2)}%`;
   });
-  on(pinLayer,'pointerup',(e)=>{
+  on(window,'pointerup',()=>{
     if(!draggingPin) return;
-    const pt = pctFromEvent(e);
-    draggingPin.pin.x_pct = pt.x_pct;
-    draggingPin.pin.y_pct = pt.y_pct;
+    const rect = stageImage.getBoundingClientRect();
+    // If mouse left the image entirely, still commit last known position from element style
+    const leftPct = parseFloat(draggingPin.el.style.left) || 0;
+    const topPct  = parseFloat(draggingPin.el.style.top)  || 0;
+    draggingPin.pin.x_pct = clamp(leftPct, 0, 100);
+    draggingPin.pin.y_pct = clamp(topPct , 0, 100);
     draggingPin.pin.lastEdited = Date.now();
     saveProject(project);
     draggingPin = null;
@@ -620,7 +658,7 @@ document.addEventListener('DOMContentLoaded', () => {
   on(inputLevel,'input',()=>{ projectContext.level = inputLevel.value; });
 
   /******************
-   * Measuring (main canvas) – live preview + prompt
+   * Measuring (main canvas)
    ******************/
   let measureActive = false;
   let measureDrag = null; // {start:{x,y}, end:{x,y}}
@@ -646,6 +684,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function stageLocal(e){
     const r = stageImage.getBoundingClientRect();
     return { x: clamp(e.clientX-r.left,0,r.width), y: clamp(e.clientY-r.top,0,r.height) };
+    // Coordinates auto-scale with zoom via getBoundingClientRect
   }
 
   on(stage,'pointerdown',(e)=>{
@@ -1019,7 +1058,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)){
       const p = selectedPin(); if(!p) return;
       e.preventDefault();
-      const delta = project.settings.fieldMode ? 0.5 : 0.2;
+      const delta = project?.settings?.fieldMode ? 0.5 : 0.2;
       if(e.key==='ArrowUp') p.y_pct = clamp(p.y_pct - delta, 0, 100);
       if(e.key==='ArrowDown') p.y_pct = clamp(p.y_pct + delta, 0, 100);
       if(e.key==='ArrowLeft') p.x_pct = clamp(p.x_pct - delta, 0, 100);
