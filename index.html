@@ -86,7 +86,7 @@
     .side{border-left:1px solid var(--line);padding:.7rem;overflow:auto}
   </style>
 
-  <!-- libs (export/pdf ready if needed later) -->
+  <!-- libs -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
@@ -124,8 +124,8 @@
             <h3 style="margin:0 0 .4rem 0;">Quick tips</h3>
             <div class="help">
               <div>• Drag pins to move them. Double-click a pin to open its photos.</div>
-              <div>• Draw a measurement line (map or photo), then enter your measured length.</div>
-              <div>• Add a custom pin name if it’s not in the dropdown.</div>
+              <div>• Draw a measurement line (map or photo), release, then enter your measured length.</div>
+              <div>• Use custom pin names when a type isn’t in the dropdown.</div>
             </div>
           </div>
         </div>
@@ -153,10 +153,19 @@
         <div class="spaced">
           <span class="pill">Building <input id="inputBuilding" style="width:120px" placeholder="A"></span>
           <span class="pill">Level <input id="inputLevel" style="width:80px" placeholder="1"></span>
+
           <input id="inputUpload" type="file" class="hidden" accept="image/*,application/pdf" multiple />
           <button id="btnUpload" class="btn-primary">Upload Page(s)</button>
+
           <button id="btnMeasureToggle">Measure: OFF</button>
           <button id="btnMeasureClear">Clear Measures</button>
+
+          <!-- Export / Import -->
+          <input id="inputImportCSV" type="file" class="hidden" accept="text/csv" />
+          <button id="btnExportCSV">Export CSV</button>
+          <button id="btnExportXLSX">Export Excel</button>
+          <button id="btnExportZIP">Export ZIP</button>
+          <button id="btnImportCSV">Import CSV</button>
         </div>
       </div>
 
