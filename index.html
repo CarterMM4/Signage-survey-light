@@ -23,8 +23,9 @@
     html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
     a{color:var(--accent);text-decoration:none}
     a:hover{text-decoration:underline}
-    button{background:#17224a;border:1px solid var(--line);color:var(--text);padding:.7rem 1rem;border-radius:12px;cursor:pointer}
+    button{background:#17224a;border:1px solid var(--line);color:var(--text);padding:.7rem 1rem;border-radius:12px;cursor:pointer;transition:transform .06s ease}
     button:hover{background:#1d2a5a}
+    button:active{transform:translateY(1px)}
     .btn-primary{background:linear-gradient(180deg, var(--accent), var(--accent-2)); color:#03210e; border:0; font-weight:700}
     .btn-primary:hover{filter:brightness(1.05)}
     input,select{background:#0f1736;border:1px solid var(--line);color:var(--text);padding:.6rem .7rem;border-radius:10px}
@@ -62,9 +63,11 @@
     .thumb img{width:100%;height:120px;object-fit:cover;border-radius:8px;background:#061023}
     .thumb input{width:100%;margin-top:.35rem}
 
-    .stage{position:relative;border:1px dashed #2b3562;border-radius:14px;background:#081229;display:flex;align-items:center;justify-content:center;overflow:auto;min-height:420px}
-    .stage-inner{position:relative;display:flex;align-items:center;justify-content:center}
-    #stageImage{max-width:100%;max-height:100%;display:block}
+    .stage{position:relative;border:1px dashed #2b3562;border-radius:14px;background:#081229;display:flex;align-items:center;justify-content:flex-start;overflow:auto;min-height:420px}
+    .stage-inner{position:relative;display:inline-block;transform-origin:0 0}
+    /* Use natural image size; we handle zoom with transforms so scrolling works when large */
+    #stageImage{display:block}
+    #measureSvg{position:absolute;inset:0;pointer-events:none}
     #pinLayer{position:absolute;inset:0;pointer-events:none}
     .pin{position:absolute;transform:translate(-50%,-100%);padding:.28rem .6rem;font-size:.82rem;border-radius:999px;border:1px solid rgba(0,0,0,.35);color:#031a0c;font-weight:800;box-shadow:0 3px 10px rgba(0,0,0,.35);pointer-events:auto;background:var(--accent)}
     .pin.selected{outline:2px solid #fff}
@@ -160,6 +163,11 @@
           <button id="btnMeasureToggle">Measure: OFF</button>
           <button id="btnMeasureClear">Clear Measures</button>
 
+          <!-- Zoom controls -->
+          <button id="btnZoomOut" title="Ctrl+Wheel also works">− Zoom</button>
+          <button id="btnZoomIn" title="Ctrl+Wheel also works">+ Zoom</button>
+          <button id="btnZoomReset">Reset</button>
+
           <!-- Export / Import -->
           <input id="inputImportCSV" type="file" class="hidden" accept="text/csv" />
           <button id="btnExportCSV">Export CSV</button>
@@ -176,7 +184,7 @@
         </div>
 
         <div class="panel stage" id="stage">
-          <div class="stage-inner">
+          <div class="stage-inner" id="stageInner">
             <img id="stageImage" alt="No page yet" />
             <svg id="measureSvg" class="measure" width="100%" height="100%"></svg>
             <div id="pinLayer"></div>
