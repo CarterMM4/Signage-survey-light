@@ -4,7 +4,7 @@ document.addEventListener('DOMContentLoaded', () => {
    * Utilities
    ******************/
   const $ = (id) => document.getElementById(id);
-  const on = (el, evt, fn) => el && el.addEventListener(evt, fn);
+  const on = (el, evt, fn, opts) => el && el.addEventListener(evt, fn, opts || false);
 
   function id(){ return Math.random().toString(36).slice(2,10); }
   function clamp(n,min,max){ return Math.max(min, Math.min(max, n)); }
@@ -56,7 +56,7 @@ document.addEventListener('DOMContentLoaded', () => {
   ];
 
   let projects = loadProjects();
-  let project = null; // current project object
+  let project = null;
   const projectContext = { building:'', level:'' };
 
   function loadProjects(){
@@ -72,14 +72,7 @@ document.addEventListener('DOMContentLoaded', () => {
     saveProjectsList();
   }
   function newProject(name){
-    return {
-      id: id(),
-      name: name,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-      pages: [],
-      settings: { fieldMode: false }
-    };
+    return { id:id(), name, createdAt:Date.now(), updatedAt:Date.now(), pages:[], settings:{ fieldMode:false } };
   }
   function selectProject(pid){
     const found = projects.find(p=>p.id===pid);
@@ -91,34 +84,30 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   /******************
-   * HOME – recent projects
+   * HOME
    ******************/
   const homeRecent = $('homeRecent');
   function renderHomeRecent(){
     projects = loadProjects();
     homeRecent.innerHTML = '';
-    projects
-      .slice()
-      .sort((a,b)=> b.updatedAt - a.updatedAt)
-      .slice(0,6)
-      .forEach(p=>{
-        const card = document.createElement('div'); card.className='card';
-        const h = document.createElement('h4'); h.textContent=p.name; card.appendChild(h);
-        const meta = document.createElement('div'); meta.className='muted';
-        const pinCount = (p.pages||[]).reduce((acc,pg)=>acc+(pg.pins?pg.pins.length:0),0);
-        meta.textContent = `Pages: ${p.pages.length} • Pins: ${pinCount}`;
-        card.appendChild(meta);
-        const row = document.createElement('div'); row.className='spaced';
-        const open = document.createElement('button'); open.textContent='Open'; open.className='btn-primary';
-        on(open,'click',()=> selectProject(p.id));
-        row.appendChild(open);
-        card.appendChild(row);
-        homeRecent.appendChild(card);
-      });
+    projects.slice().sort((a,b)=> b.updatedAt-a.updatedAt).slice(0,6).forEach(p=>{
+      const card = document.createElement('div'); card.className='card';
+      const h = document.createElement('h4'); h.textContent=p.name; card.appendChild(h);
+      const meta = document.createElement('div'); meta.className='muted';
+      const pinCount = (p.pages||[]).reduce((acc,pg)=>acc+(pg.pins?pg.pins.length:0),0);
+      meta.textContent = `Pages: ${p.pages.length} • Pins: ${pinCount}`;
+      card.appendChild(meta);
+      const row = document.createElement('div'); row.className='spaced';
+      const open = document.createElement('button'); open.textContent='Open'; open.className='btn-primary';
+      on(open,'click',()=> selectProject(p.id));
+      row.appendChild(open);
+      card.appendChild(row);
+      homeRecent.appendChild(card);
+    });
   }
 
   /******************
-   * Projects screen
+   * Projects
    ******************/
   const projectsGrid = $('projectsGrid');
   const projSearch = $('projSearch');
@@ -186,7 +175,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   /******************
-   * Editor DOM refs
+   * Editor refs
    ******************/
   const thumbsEl = $('thumbs');
   const stage = $('stage');
@@ -233,6 +222,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnZoomIn = $('btnZoomIn');
   const btnZoomOut = $('btnZoomOut');
   const btnZoomReset = $('btnZoomReset');
+  const btnZoomFit = $('btnZoomFit');
 
   // Export/Import
   const btnExportCSV = $('btnExportCSV');
@@ -256,33 +246,44 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnPhotoDownload = $('btnPhotoDownload');
 
   /******************
-   * Zoom (stage)
+   * Zoom (stage) + Fit
    ******************/
   let stageZoom = 1;
   function applyZoom(){
     stageInner.style.transform = `scale(${stageZoom})`;
-    // Resize overlay SVG to match image's rendered box at current zoom
-    const rect = stageImage.getBoundingClientRect();
-    measureSvg.setAttribute('width', rect.width);
-    measureSvg.setAttribute('height', rect.height);
+    // Resize measure SVG to current rendered image size
+    const r = stageImage.getBoundingClientRect();
+    measureSvg.setAttribute('width', r.width);
+    measureSvg.setAttribute('height', r.height);
   }
   function zoomBy(f){ stageZoom = clamp(stageZoom * f, 0.25, 6); applyZoom(); }
   function zoomReset(){ stageZoom = 1; applyZoom(); }
+  function zoomFit(){
+    // Fit the whole image inside the stage viewport
+    const sw = stage.clientWidth, sh = stage.clientHeight;
+    const iw = stageImage.naturalWidth || 1;
+    const ih = stageImage.naturalHeight || 1;
+    const fit = Math.min(sw/iw, sh/ih, 1);
+    stageZoom = clamp(fit, 0.1, 6);
+    applyZoom();
+  }
 
   on(btnZoomIn,'click',()=> zoomBy(1.2));
   on(btnZoomOut,'click',()=> zoomBy(1/1.2));
   on(btnZoomReset,'click', zoomReset);
-
-  // Ctrl + wheel zoom (pinch on trackpads triggers ctrlKey=true in many browsers)
+  on(btnZoomFit,'click', zoomFit);
+  // Ctrl + wheel zoom
   on(stage,'wheel',(e)=>{
-    if(!e.ctrlKey) return; // avoid hijacking normal scroll
+    if(!e.ctrlKey) return;
     e.preventDefault();
     const dir = e.deltaY > 0 ? (1/1.15) : 1.15;
     zoomBy(dir);
   }, {passive:false});
+  // Refit when window resizes
+  on(window,'resize',()=> { if(currentPage()) zoomFit(); });
 
   /******************
-   * Editor helpers
+   * Helpers
    ******************/
   function currentPage(){
     if(!project) return null;
@@ -298,8 +299,7 @@ document.addEventListener('DOMContentLoaded', () => {
       room_name: '',
       building: inputBuilding.value || projectContext.building || '',
       level: inputLevel.value || projectContext.level || '',
-      x_pct: x_pct,
-      y_pct: y_pct,
+      x_pct, y_pct,
       notes: '',
       photos: [],
       lastEdited: Date.now()
@@ -333,15 +333,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   function addImagePage(blobUrl, name){
-    const pg = {
-      id: id(),
-      name: name || 'Image',
-      kind: 'image',
-      blobUrl: blobUrl,
-      pins: [],
-      measurements: [],
-      updatedAt: Date.now()
-    };
+    const pg = { id:id(), name:name||'Image', kind:'image', blobUrl, pins:[], measurements:[], updatedAt:Date.now() };
     project.pages.push(pg);
     if(!project._pageId) project._pageId = pg.id;
     saveProject(project);
@@ -358,16 +350,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const ctx = canvas.getContext('2d');
       await page.render({canvasContext:ctx, viewport:viewport}).promise;
       const dataUrl = canvas.toDataURL('image/png');
-      const pg = {
-        id: id(),
-        name: `${file.name.replace(/\.[^.]+$/,'')} · p${i}`,
-        kind: 'pdf',
-        pdfPage: i,
-        blobUrl: dataUrl,
-        pins: [],
-        measurements: [],
-        updatedAt: Date.now()
-      };
+      const pg = { id:id(), name:`${file.name.replace(/\.[^.]+$/,'')} · p${i}`, kind:'pdf', pdfPage:i, blobUrl:dataUrl, pins:[], measurements:[], updatedAt:Date.now() };
       project.pages.push(pg);
     }
     if(!project._pageId && project.pages[0]) project._pageId = project.pages[0].id;
@@ -382,8 +365,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if(typesFilled) return;
     Object.keys(SIGN_TYPES).forEach(t=>{
       const o=document.createElement('option'); o.value=t; o.textContent=t;
-      filterType.appendChild(o.cloneNode(true));
-      fieldType.appendChild(o);
+      $('filterType').appendChild(o.cloneNode(true));
+      $('fieldType').appendChild(o);
     });
     typesFilled = true;
   }
@@ -397,7 +380,7 @@ document.addEventListener('DOMContentLoaded', () => {
     renderPinsList();
     toggleField.checked = !!project.settings.fieldMode;
     drawMeasurements();
-    applyZoom(); // sync overlay sizes
+    // Fit after image loads (onload will also call zoomFit)
   }
 
   function renderProjectLabel(){
@@ -413,7 +396,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const inp = document.createElement('input'); inp.value = pg.name;
       on(inp,'input',()=>{ pg.name = inp.value; pg.updatedAt=Date.now(); saveProject(project); renderProjectLabel(); });
       d.appendChild(inp);
-      on(d,'click',()=>{ project._pageId=pg.id; saveProject(project); renderStage(); renderPins(); drawMeasurements(); applyZoom(); });
+      on(d,'click',()=>{ project._pageId=pg.id; saveProject(project); renderStage(); renderPins(); drawMeasurements(); });
       thumbsEl.appendChild(d);
     });
   }
@@ -421,27 +404,22 @@ document.addEventListener('DOMContentLoaded', () => {
   function renderStage(){
     const pg = currentPage();
     if(!pg){ stageImage.removeAttribute('src'); return; }
+    // After image sets src, wait for dimensions to be known before fitting
+    stageImage.onload = ()=> { zoomFit(); applyZoom(); };
     stageImage.src = pg.blobUrl;
-    // Reset zoom when switching pages for clarity but keep user option
-    zoomReset();
   }
 
   function pctFromEvent(e){
     const rect = stageImage.getBoundingClientRect();
     const x = clamp(e.clientX - rect.left, 0, rect.width);
     const y = clamp(e.clientY - rect.top , 0, rect.height);
-    return {
-      x_pct: +(x/rect.width*100).toFixed(3),
-      y_pct: + (y/rect.height*100).toFixed(3)
-    };
+    return { x_pct: +(x/rect.width*100).toFixed(3), y_pct: +(y/rect.height*100).toFixed(3) };
   }
 
   function colorForPin(p){
     if(p.sign_type) return SIGN_TYPES[p.sign_type] || '#2ecc71';
     const name = (p.custom_name || p.room_name || '').trim();
-    for(const r of NAME_COLOR_RULES){
-      if(r.re.test(name)) return r.color;
-    }
+    for(const r of NAME_COLOR_RULES){ if(r.re.test(name)) return r.color; }
     return '#2ecc71';
   }
 
@@ -520,23 +498,18 @@ document.addEventListener('DOMContentLoaded', () => {
   function updatePinFields(){
     const p = selectedPin();
     selId.textContent = p ? p.id : 'None';
-    // Guard against missing inputs
-    if(fieldType) fieldType.value = p?.sign_type || '';
-    if(fieldCustom) fieldCustom.value = p?.custom_name || '';
-    if(fieldRoomNum) fieldRoomNum.value = p?.room_number || '';
-    if(fieldRoomName) fieldRoomName.value = p?.room_name || '';
-    if(fieldBuilding) fieldBuilding.value = p?.building || '';
-    if(fieldLevel) fieldLevel.value = p?.level || '';
-    if(fieldNotes) fieldNotes.value = p?.notes || '';
+    fieldType.value = p?.sign_type || '';
+    fieldCustom.value = p?.custom_name || '';
+    fieldRoomNum.value = p?.room_number || '';
+    fieldRoomName.value = p?.room_name || '';
+    fieldBuilding.value = p?.building || '';
+    fieldLevel.value = p?.level || '';
+    fieldNotes.value = p?.notes || '';
     const x = Number(p?.x_pct||0).toFixed(2), y=Number(p?.y_pct||0).toFixed(2);
     posLabel.textContent = p ? `${x}%, ${y}%` : '—';
   }
 
-  function selectedPin(){
-    const idv = project?._sel;
-    if(!idv) return null;
-    return findPin(idv);
-  }
+  function selectedPin(){ return project?._sel ? findPin(project._sel) : null; }
 
   function selectPin(idv, center){
     project._sel = idv;
@@ -549,7 +522,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   /******************
-   * Editing & Pins
+   * Add & Drag Pins (fixed)
    ******************/
   let addingPin = false;
   on(btnAddPin,'click',()=>{
@@ -570,7 +543,6 @@ document.addEventListener('DOMContentLoaded', () => {
     selectPin(p.id,true);
   });
 
-  // Dragging pins (fixed: listen on window so pointer capture works everywhere)
   let draggingPin = null;
   on(window,'pointermove',(e)=>{
     if(!draggingPin) return;
@@ -579,10 +551,8 @@ document.addEventListener('DOMContentLoaded', () => {
     draggingPin.el.style.top = pt.y_pct + '%';
     posLabel.textContent = `${pt.x_pct.toFixed(2)}%, ${pt.y_pct.toFixed(2)}%`;
   });
-  on(window,'pointerup',()=>{
+  const stopDrag = ()=>{
     if(!draggingPin) return;
-    const rect = stageImage.getBoundingClientRect();
-    // If mouse left the image entirely, still commit last known position from element style
     const leftPct = parseFloat(draggingPin.el.style.left) || 0;
     const topPct  = parseFloat(draggingPin.el.style.top)  || 0;
     draggingPin.pin.x_pct = clamp(leftPct, 0, 100);
@@ -591,7 +561,10 @@ document.addEventListener('DOMContentLoaded', () => {
     saveProject(project);
     draggingPin = null;
     renderPinsList();
-  });
+  };
+  on(window,'pointerup', stopDrag);
+  on(window,'pointercancel', stopDrag);
+  on(window,'blur', stopDrag);
 
   // Field bindings
   [fieldType,fieldCustom,fieldRoomNum,fieldRoomName,fieldBuilding,fieldLevel,fieldNotes].forEach(el=>{
@@ -684,7 +657,6 @@ document.addEventListener('DOMContentLoaded', () => {
   function stageLocal(e){
     const r = stageImage.getBoundingClientRect();
     return { x: clamp(e.clientX-r.left,0,r.width), y: clamp(e.clientY-r.top,0,r.height) };
-    // Coordinates auto-scale with zoom via getBoundingClientRect
   }
 
   on(stage,'pointerdown',(e)=>{
@@ -719,7 +691,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function drawMeasurements(){
     while(measureSvg.firstChild) measureSvg.removeChild(measureSvg.firstChild);
-    measureSvg.appendChild(stagePreview); // keep preview element
+    measureSvg.appendChild(stagePreview);
     const pg = currentPage(); if(!pg || !pg.measurements) return;
     pg.measurements.forEach(m=>{
       const a = m.points[0], b = m.points[1];
@@ -742,16 +714,26 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   /******************
-   * Photo modal + measurement
+   * Photo modal + measurement (fixed pointer events & sizing)
    ******************/
   const photoState = { pin: null, idx: 0, measure: false };
-  let photoDrag = null; // {start:{x,y}, end:{x,y}}
-  const photoPreview = document.createElementNS('http://www.w3.org/2000/svg','line');
-  photoPreview.setAttribute('stroke','#2ecc71');
-  photoPreview.setAttribute('stroke-width','3');
-  photoPreview.setAttribute('stroke-dasharray','6,6');
-  photoPreview.style.display='none';
-  photoMeasureSvg.appendChild(photoPreview);
+  let photoDrag = null;
+  const photoPreview = document.createElementNS('http://www.w3.org/200/svg','line'); // (typo-proofed below)
+  // Fix typo in namespace:
+  photoMeasureSvg.removeChild(photoMeasureSvg.firstChild || document.createTextNode(''));
+  const photoPreviewFixed = document.createElementNS('http://www.w3.org/2000/svg','line');
+  photoPreviewFixed.setAttribute('stroke','#2ecc71');
+  photoPreviewFixed.setAttribute('stroke-width','3');
+  photoPreviewFixed.setAttribute('stroke-dasharray','6,6');
+  photoPreviewFixed.style.display='none';
+  photoMeasureSvg.appendChild(photoPreviewFixed);
+
+  function photoSyncOverlay(){
+    // Match overlay to displayed photo size
+    const r = photoImg.getBoundingClientRect();
+    photoMeasureSvg.setAttribute('width', r.width);
+    photoMeasureSvg.setAttribute('height', r.height);
+  }
 
   function openPhotoModal(){
     const p = selectedPin();
@@ -761,24 +743,25 @@ document.addEventListener('DOMContentLoaded', () => {
     photoState.idx = 0;
     showPhoto();
     photoModal.classList.add('show');
+    setTimeout(photoSyncOverlay, 50);
   }
-  function closePhotoModal(){ photoModal.classList.remove('show'); photoDrag=null; photoPreview.style.display='none'; }
+  function closePhotoModal(){ photoModal.classList.remove('show'); photoDrag=null; photoPreviewFixed.style.display='none'; }
 
   on(btnOpenPhoto,'click',()=> openPhotoModal());
   on(btnPhotoClose,'click',()=> closePhotoModal());
 
   function showPhoto(){
     const ph = photoState.pin.photos[photoState.idx];
+    photoImg.onload = ()=> { photoSyncOverlay(); drawPhotoMeasurements(); };
     photoImg.src = ph.dataUrl;
     photoPinId.textContent = photoState.pin.id;
     photoName.textContent = ph.name || `Photo ${photoState.idx+1}`;
     photoMeaCount.textContent = (ph.measurements?.length||0);
-    drawPhotoMeasurements();
   }
 
   function drawPhotoMeasurements(){
     while(photoMeasureSvg.firstChild) photoMeasureSvg.removeChild(photoMeasureSvg.firstChild);
-    photoMeasureSvg.appendChild(photoPreview);
+    photoMeasureSvg.appendChild(photoPreviewFixed);
     const ph = photoState.pin?.photos[photoState.idx]; if(!ph||!ph.measurements) return;
     ph.measurements.forEach(m=>{
       const a=m.points[0], b=m.points[1];
@@ -800,7 +783,7 @@ document.addEventListener('DOMContentLoaded', () => {
   on(btnPhotoMeasure,'click',()=>{
     photoState.measure = !photoState.measure;
     btnPhotoMeasure.textContent = 'Measure: ' + (photoState.measure?'ON':'OFF');
-    if(!photoState.measure){ photoPreview.style.display='none'; photoDrag=null; }
+    if(!photoState.measure){ photoPreviewFixed.style.display='none'; photoDrag=null; }
   });
 
   on(photoMeasureSvg,'pointerdown',(e)=>{
@@ -808,17 +791,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const r = photoImg.getBoundingClientRect();
     const s = { x: clamp(e.clientX-r.left,0,r.width), y: clamp(e.clientY-r.top,0,r.height) };
     photoDrag = { start:s, end:s };
-    photoPreview.setAttribute('x1', s.x); photoPreview.setAttribute('y1', s.y);
-    photoPreview.setAttribute('x2', s.x); photoPreview.setAttribute('y2', s.y);
-    photoPreview.style.display='block';
+    photoPreviewFixed.setAttribute('x1', s.x); photoPreviewFixed.setAttribute('y1', s.y);
+    photoPreviewFixed.setAttribute('x2', s.x); photoPreviewFixed.setAttribute('y2', s.y);
+    photoPreviewFixed.style.display='block';
   });
   on(photoMeasureSvg,'pointermove',(e)=>{
     if(!photoDrag) return;
     const r = photoImg.getBoundingClientRect();
     const p = { x: clamp(e.clientX-r.left,0,r.width), y: clamp(e.clientY-r.top,0,r.height) };
     photoDrag.end = p;
-    photoPreview.setAttribute('x2', p.x);
-    photoPreview.setAttribute('y2', p.y);
+    photoPreviewFixed.setAttribute('x2', p.x);
+    photoPreviewFixed.setAttribute('y2', p.y);
   });
   on(photoMeasureSvg,'pointerup',()=>{
     if(!photoDrag) return;
@@ -826,30 +809,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const length = prompt('Enter measured length (ft):','10');
     if(length){
       ph.measurements = ph.measurements || [];
-      ph.measurements.push({
-        id: id(),
-        kind: 'photo',
-        points: [photoDrag.start, photoDrag.end],
-        feet: parseFloat(length)||0
-      });
+      ph.measurements.push({ id:id(), kind:'photo', points:[photoDrag.start, photoDrag.end], feet: parseFloat(length)||0 });
       saveProject(project);
       drawPhotoMeasurements();
       photoMeaCount.textContent = ph.measurements.length;
     }
-    photoPreview.style.display='none';
+    photoPreviewFixed.style.display='none';
     photoDrag = null;
   });
 
-  on(btnPhotoPrev,'click',()=>{
-    if(!photoState.pin) return;
-    photoState.idx = Math.max(0, photoState.idx-1);
-    showPhoto();
-  });
-  on(btnPhotoNext,'click',()=>{
-    if(!photoState.pin) return;
-    photoState.idx = Math.min(photoState.pin.photos.length-1, photoState.idx+1);
-    showPhoto();
-  });
+  on(btnPhotoPrev,'click',()=>{ if(!photoState.pin) return; photoState.idx = Math.max(0, photoState.idx-1); showPhoto(); });
+  on(btnPhotoNext,'click',()=>{ if(!photoState.pin) return; photoState.idx = Math.min(photoState.pin.photos.length-1, photoState.idx+1); showPhoto(); });
   on(btnPhotoDelete,'click',()=>{
     if(!photoState.pin) return;
     if(!confirm('Delete this photo?')) return;
@@ -1052,7 +1022,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   /******************
-   * Keyboard: nudge pin
+   * Keyboard nudge
    ******************/
   window.addEventListener('keydown',(e)=>{
     if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)){
@@ -1071,7 +1041,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   /******************
-   * First load – always start on Home
+   * First load
    ******************/
   showScreen('home');
   renderHomeRecent();
